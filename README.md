@@ -44,6 +44,6 @@ IIOP 面向工业设备巡检与运维场景，计划建设由微服务后端、
 
 工程初始化已经完成，`docs/spec/00-overview.md` 到 `05-roadmap.md` 已完成简化版 G0 收口并冻结。
 
-第一版控制复杂度：5 个逻辑数据库、25 张业务表；AI 只保留 DeepSeek + LangChain4j + LangGraph4j 5 节点诊断；WebSocket 使用原生 JSON 通知；不增加 AI 聊天助手、RAG、向量数据库或额外文件微服务。
+第一版控制复杂度：5 个逻辑数据库、25 张业务表；AI 只保留 DeepSeek + LangChain4j + LangGraph4j 5 节点诊断；WebSocket 使用原生 JSON 通知；不增加与主业务无关的额外子系统或微服务。
 
 当前尚未实现业务代码。下一阶段按照 `05-roadmap.md` 执行 M1 数据库 SQL。
