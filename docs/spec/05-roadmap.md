@@ -462,11 +462,11 @@ feat: implement initial database schemas
 
 ---
 
-# 13. M2 开发环境预检
+# 13. M2 开发环境与基础设施准备
 
 M1 通过后开始。
 
-这一阶段优先确认工具与路径，不写大规模业务。
+M2 分为 M2-A 预检和 M2-B 基础设施落地。M2-A 不下载大体积组件；只有预检明确通过后，才进入 M2-B。
 
 ## 13.1 M2-A 工具与路径预检
 
@@ -697,16 +697,14 @@ Nacos Discovery/Config 基础接入。
 
 ## 15.4 首次数据库运行
 
-如果基础设施已准备：
+M4 进入运行验收前，M2-B 必须已经通过。
 
-1. 执行 auth SQL；
+执行：
+
+1. 确认 iiop_auth schema 已由 M2-B 导入；
 2. 配置 iiop_auth datasource；
-3. 启动 MySQL/Redis/Nacos；
+3. 确认 MySQL、Redis、Nacos 正常；
 4. 启动 iiop-auth。
-
-如果基础设施尚未准备：
-
-先保证 compile/test，再进入基础设施配置阶段。
 
 ## 15.5 验收
 
@@ -881,79 +879,81 @@ feat: implement device service
 
 # 19. M8 附件存储基础
 
-在巡检 PHOTO 和 HarmonyOS 开发前必须完成通用存储基础。具体业务上传端点分别在 M9 inspection 和 M10 maintenance 中落地。
+在巡检 PHOTO 和 HarmonyOS 开发前完成通用存储基础。具体业务上传端点分别在 M9 inspection 和 M10 maintenance 中落地。
 
-## 19.1 约束
+## 19.1 架构边界
 
 不增加独立 file 微服务。
 
-第一版建议把通用文件能力放在 iiop-auth 或 gateway 均不合理。
+iiop-auth 和 iiop-gateway 不承担业务附件上传。
 
-最终实现优先采用：
+第一版采用：
 
-由各业务服务接收自己领域附件，统一复用 common 中的文件存储工具。
-
-具体：
-
-inspection：
-
-1. 巡检图片；
-2. 异常证据。
-
-maintenance：
-
-1. 工单附件。
+1. iiop-common 只提供无业务状态的本地文件存储抽象和安全工具；
+2. iiop-inspection 在 M9 提供巡检与异常附件上传；
+3. iiop-maintenance 在 M10 提供工单附件上传；
+4. 各服务只保存自己领域中的附件 URL。
 
 文件根目录：
 
 E:/IIOP-data/uploads/
 
-URL 统一通过 Gateway 暴露或由业务服务返回稳定访问地址。
+具体 URL 暴露方式、API 路径和访问控制必须先在 G0 补入 02-backend.md，再实现代码。
 
 ## 19.2 common 可包含
 
-只允许无业务状态的：
+允许：
 
-1. FileStorageProperties；
-2. LocalFileStorage 工具接口；
-3. 文件名安全处理；
-4. MIME/大小校验公共逻辑。
+1. LocalFileStorage 接口或纯 Java 工具；
+2. 安全文件名生成；
+3. 路径规范化；
+4. MIME/扩展名白名单校验；
+5. 文件大小校验；
+6. 安全目录拼接。
 
-不能把附件数据库业务放 common。
+如果 FileStorageProperties 需要 Spring ConfigurationProperties，应放到具体启动服务，不为了附件让 iiop-common 引入 Spring Boot starter。
 
-## 19.3 安全
+common 禁止：
 
-1. UUID/雪花 ID 新文件名；
+1. Controller；
+2. 业务数据库；
+3. inspection/maintenance 专属 DTO；
+4. 业务附件记录。
+
+## 19.3 安全要求
+
+1. 使用 UUID 或等价唯一新文件名；
 2. 防止 ../ 路径穿越；
-3. 限制图片 MIME；
+3. 限制允许 MIME；
 4. 限制大小；
 5. 不执行上传文件；
 6. 不信任原始扩展名；
-7. 不上传到 C 盘。
+7. 文件根目录必须在 E 盘；
+8. 原始文件名仅可作为脱敏展示元数据，不能直接作为物理路径；
+9. 禁止上传脚本、可执行文件和服务端可执行内容。
 
 ## 19.4 M8 验收
 
-本阶段只验收通用存储基础：
+本阶段只验收存储基础：
 
-1. 文件写入 E:/IIOP-data/uploads；
-2. 生成安全的新文件名；
-3. 路径穿越被拒绝；
-4. MIME/扩展名校验逻辑有测试；
-5. 大小限制逻辑有测试；
+1. 文件能够写入 E:/IIOP-data/uploads；
+2. 自动生成安全文件名；
+3. 路径穿越测试失败；
+4. 非允许类型测试失败；
+5. 超限大小测试失败；
 6. 无业务数据库依赖；
-7. 无独立文件微服务。
+7. 无独立文件微服务；
+8. common 没有因为文件功能变成启动服务。
 
 M9/M10 再分别验收真实业务上传端点和 evidence_urls/attachments URL。
 
 ## 19.5 Commit
 
 ~~~text
-feat: add local attachment storage
+feat: add local attachment storage foundation
 ~~~
 
-说明：
-
-在正式执行 M8 前，02-backend.md 必须完成对应 API 规范补充。
+正式执行 M8 前，02-backend.md 必须已经完成附件 API 规范补充。
 
 ---
 
