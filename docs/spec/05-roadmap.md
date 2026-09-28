@@ -869,23 +869,27 @@ v1.0.0-defense
 - M0；
 - G0；
 - M1 SQL 文件；
-- M2-A 环境准备。
+- M2-A 环境准备；
+- **S1 基础设施：PASS**。
+
+S1 已实机验证：
+
+- MySQL 8.0.43 可连接；
+- 5 个 IIOP 逻辑数据库已创建；
+- 25 张业务表已实际导入并验证；
+- 4 个角色、33 个权限码和演示设备数据已验证；
+- Redis `PING -> PONG`；
+- RocketMQ NameServer/Broker 正常；
+- Sentinel Dashboard 正常；
+- Nacos 3.0.3 已从失败的 Derby 切换到独立 MySQL `nacos_config`，8848 与本机 Console 端口可访问；
+- Nacos 使用独立数据库账号；
+- Git 工作区无 Secret 提交。
 
 当前执行：
 
-**S1 基础设施。**
-
-S1 未通过前不进入 S2。
-
-当前剩余核心事项以真实本机状态为准，至少需要：
-
-1. M1 SQL 实际导入并验证 25 张表；
-2. Nacos 3.0.3 可正常连接；
-3. 保持 Redis、RocketMQ、Sentinel 已通过能力不回退。
-
-S1 通过后直接进入：
-
 **S2-A common + auth + gateway。**
+
+本轮完成后必须先验收和审查，再进入 S2-B。
 
 ---
 
