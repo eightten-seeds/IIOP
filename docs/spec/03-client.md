@@ -63,10 +63,11 @@ HarmonyOS         │
 3. 业务接口统一访问 Gateway；
 4. PC 实时通知通过 Gateway WebSocket 路由；
 5. HarmonyOS 第一版通知以 REST 拉取为主，后续若时间充足再接原生 WebSocket；
-6. Long 类型业务 ID 在客户端统一当作字符串处理，避免 JavaScript Number 精度问题；
-7. 后端最终对外 JSON 的 Long ID 应序列化成字符串，客户端 Model 的 id/deviceId/taskId/workOrderId 等字段均定义为 string。
+6. 业务 ID 在客户端统一当作字符串处理，避免 JavaScript Number 精度问题；
+7. 后端 Entity/内部服务仍使用 Long，但外部 VO 的 id/deviceId/taskId/workOrderId/diagnosisId 等业务 ID 按字符串契约返回；
+8. PageResult.total、duration 等普通数值继续保持数值语义。
 
-第 6、7 条是客户端与后端的跨规范要求。后端编码阶段必须同步落实。
+第 6 到 8 条与 02-backend.md 的外部 ID 契约保持一致。
 
 ---
 
@@ -414,7 +415,7 @@ AI 智能运维
 | /device/monitor | 实时监测 | device:view |
 | /device/sops | SOP 管理 | device:view |
 | /inspection/templates | 巡检模板 | inspection:view |
-| /inspection/templates/:id/flow | 流程设计 | inspection:template:update |
+| /inspection/templates/:id/flow | 流程设计 | inspection:template:manage |
 | /inspection/plans | 巡检计划 | inspection:view |
 | /inspection/tasks | 巡检任务 | inspection:view |
 | /inspection/tasks/:id | 巡检任务详情 | inspection:view |
@@ -423,8 +424,8 @@ AI 智能运维
 | /maintenance/defects | 缺陷管理 | maintenance:view |
 | /maintenance/work-orders | 维修工单 | maintenance:view |
 | /maintenance/work-orders/:id | 工单详情 | maintenance:view |
-| /ai/diagnoses | AI 诊断 | ai:diagnosis |
-| /ai/diagnoses/:id | AI 诊断详情 | ai:diagnosis |
+| /ai/diagnoses | AI 诊断 | ai:view |
+| /ai/diagnoses/:id | AI 诊断详情 | ai:view |
 | /ai/chat | AI 助手 | ai:chat |
 | /system/users | 用户管理 | system:user:view |
 | /system/roles | 角色管理 | system:role:view |
@@ -904,6 +905,10 @@ GET /api/device/devices/{id}
 
 GET /api/device/devices/{id}/metrics
 
+当前指标：
+
+GET /api/device/devices/{id}/metric-snapshot
+
 趋势：
 
 GET /api/device/devices/{id}/metric-trend
@@ -942,9 +947,13 @@ GET /api/device/devices/{id}/metric-trend
 3. ECharts 趋势；
 4. 告警摘要。
 
+数据接口：
+
+GET /api/device/devices/{id}/metric-snapshot
+
 刷新策略：
 
-1. 当前选中设备指标 5 到 10 秒轮询一次，具体由联调确定；
+1. 当前选中设备的 metric-snapshot 5 到 10 秒轮询一次，具体由联调确定；
 2. 页面隐藏或销毁时停止轮询；
 3. 不允许每个列表行建立一个轮询定时器。
 
@@ -1247,9 +1256,13 @@ PHOTO：
 
 图片证据。
 
-文件上传后端契约当前在 02-backend.md 尚未正式定义。
+上传使用：
 
-因此开发图片区前，必须先补充一个真实可用的附件上传方案。客户端不得把 base64 大图直接长期写入业务 JSON，也不得伪造上传成功 URL。
+POST /api/inspection/attachments/images
+
+提交 task item 或 abnormal 时只保存上传接口返回的 URL。
+
+客户端不得把 base64 大图长期写入业务 JSON，也不得伪造上传成功 URL。
 
 ---
 
@@ -1786,10 +1799,11 @@ Java ASSIGN_ID 可能超过 JavaScript 安全整数范围。
 
 因此：
 
-1. PC TypeScript 所有 ID 类型使用 string；
-2. 后端对外 Long ID 应序列化为字符串；
+1. PC TypeScript 所有业务 ID 类型使用 string；
+2. 后端外部 VO 的业务 ID 返回字符串；
 3. URL path 可以直接传 string；
-4. 禁止 parseInt 后再保存。
+4. 禁止 parseInt 后再保存；
+5. total、durationMs、count 等普通统计数值仍使用 number。
 
 ## 42.2 时间
 
@@ -1943,7 +1957,7 @@ Storage：
 2. POST JSON；
 3. PUT JSON；
 4. DELETE；
-5. multipart 文件上传，待后端上传接口确定后启用。
+5. multipart 文件上传。
 
 基础 URL：
 
@@ -2275,7 +2289,7 @@ GET /api/maintenance/work-orders
 
 默认：
 
-assignee=当前用户。
+assigneeUserId=当前用户。
 
 列表：
 
@@ -2426,102 +2440,118 @@ AI 页面主要用于查看与现场辅助。
 
 ---
 
-# 64. 文件上传依赖项
+# 64. 附件上传与展示契约
 
-客户端设计已经明确存在图片证据需求：
+G0 已将附件方案固定到 02-backend.md。
 
-1. PC 巡检 PHOTO 项；
-2. PC 异常附件；
-3. HarmonyOS 巡检图片；
-4. HarmonyOS 异常图片；
-5. 工单附件。
+第一版不增加独立文件微服务。
 
-当前 02-backend.md 尚未正式定义统一文件上传 API 和文件存储策略。
+## 64.1 巡检与异常图片
 
-因此这是一个已识别的跨规范缺口。
+上传：
 
-在真正开发 PHOTO/附件能力之前，必须先决定：
+POST /api/inspection/attachments/images
 
-方案 A：
+请求：
 
-由后端增加轻量文件服务能力，但不增加独立微服务。
+multipart/form-data，字段名 file。
 
-方案 B：
+读取：
 
-分别由 inspection/maintenance 接收与自己领域相关的附件。
+GET /api/inspection/attachments/{fileKey}
 
-第一版优先选择简单、可本地演示、能返回稳定 URL 的方案。
+用途：
 
-无论选哪种：
+1. PHOTO 巡检项；
+2. task item evidenceUrls；
+3. abnormal evidenceUrls。
 
-1. 禁止把真实二进制长期塞入 MySQL JSON；
-2. JSON 只保存文件 URL；
-3. 上传接口必须限制文件类型和大小；
-4. 文件名不能直接信任用户原始文件名；
-5. 最终方案必须同步补充 02-backend.md。
+## 64.2 工单图片
 
-Codex 在缺口未解决前不得伪造 upload API。
+上传：
+
+POST /api/maintenance/attachments/images
+
+读取：
+
+GET /api/maintenance/attachments/{fileKey}
+
+用途：
+
+1. 工单处理证据；
+2. work-order log attachments。
+
+## 64.3 客户端处理规则
+
+1. 只接受后端允许的 JPEG、PNG、WebP；
+2. 单文件上限按后端 10 MiB；
+3. 用户确认业务提交时再上传，减少未引用孤儿文件；
+4. 上传响应保存 fileKey、url、contentType、size；
+5. 业务请求只提交 url 数组；
+6. 图片 GET 需要登录 Token，因此 PC 通过 Axios 获取 Blob 后创建 object URL，HarmonyOS 通过带 Token 的 HTTP 请求读取；
+7. 页面销毁时释放浏览器 object URL；
+8. 不把 base64 长期写入 Pinia、数据库或业务 JSON；
+9. 上传失败必须保留本地待提交状态并允许重试；
+10. 不把 Windows 本地物理路径展示给客户端。
 
 ---
 
 # 65. 客户端权限矩阵
 
+客户端权限以 01-database.md 与 02-backend.md 的固定权限编码为准。
+
 ## 65.1 SUPER_ADMIN
 
-PC：
+拥有全部权限，PC 显示全部菜单。
 
-全部菜单。
-
-HarmonyOS：
-
-允许登录，但主要作为查看和调试，不提供完整系统管理。
+HarmonyOS 可以登录，但不提供完整系统管理页面。
 
 ## 65.2 ADMIN
 
-PC：
+拥有业务管理和系统管理权限，PC 可使用：
 
 1. Dashboard；
-2. 设备；
-3. 巡检配置；
-4. 告警；
-5. 缺陷；
-6. 工单；
-7. AI；
-8. 统计。
-
-系统权限配置能力按具体 permission 控制。
+2. 设备管理；
+3. 巡检配置与处理；
+4. 告警、缺陷、工单；
+5. AI；
+6. 用户、角色、权限管理。
 
 ## 65.3 INSPECTOR
 
-PC：
+基础权限：
 
-1. Dashboard 可选只读；
-2. 设备查看；
-3. 巡检任务；
-4. 巡检异常；
-5. AI 查看；
-6. 通知。
+- dashboard:view
+- device:view
+- inspection:view
+- inspection:execute
+- ai:view
+- ai:diagnosis
+- ai:chat
 
-HarmonyOS：
+PC 主要展示设备查看、巡检任务、巡检异常只读/本人相关功能、AI 和通知。
 
-主要角色。
+HarmonyOS 是主要工作端。
 
 ## 65.4 MAINTAINER
 
-PC：
+基础权限：
 
-1. 设备查看；
-2. 告警；
-3. 缺陷；
-4. 工单；
-5. AI；
-6. 通知。
+- device:view
+- maintenance:view
+- maintenance:alarm:process
+- maintenance:defect:process
+- maintenance:workorder:create
+- maintenance:workorder:process
+- maintenance:workorder:accept
+- ai:view
+- ai:diagnosis
+- ai:confirm
+- ai:chat
 
-HarmonyOS：
+PC 和 HarmonyOS 均可处理维修主线。
 
-主要角色。
-
-权限矩阵最终由后端 permission code 决定，客户端只做展示层过滤。
+前端权限只控制展示与交互，所有实际授权仍由后端 Sa-Token 校验。
 
 ---
 
@@ -2788,12 +2818,14 @@ HarmonyOS 在 PC 和后端核心链路稳定后开始。
 
 ## H6：附件与真机联调
 
-在后端文件上传契约完成后实现：
+按第 64 章已固定的附件契约实现：
 
 1. Photo Picker；
-2. 上传；
+2. inspection 图片上传；
 3. 异常图片；
-4. 真机网络测试。
+4. maintenance 工单图片；
+5. 带 Token 的图片读取；
+6. 真机网络测试。
 
 ---
 
@@ -2847,32 +2879,21 @@ HarmonyOS 技术选择依据：
 
 ---
 
-# 76. 已识别的跨规范待补项
+# 76. G0 已收口的跨规范契约
 
-03-client.md 完成后发现一个必须在编码前解决的后端缺口：
+客户端在 G0 后依赖以下固定契约：
 
-**统一附件上传能力。**
+1. 外部业务 ID 使用字符串；
+2. PageResult.total 等普通数值保持 number；
+3. 设备当前指标使用 GET /api/device/devices/{id}/metric-snapshot；
+4. inspection 图片使用 /api/inspection/attachments/**；
+5. maintenance 图片使用 /api/maintenance/attachments/**；
+6. AI 诊断列表/详情使用 ai:view，发起诊断使用 ai:diagnosis，人工确认使用 ai:confirm；
+7. Vue Flow 使用 inspection:template:manage；
+8. 客户端不访问 /internal/**；
+9. 工单中的 aiDiagnosisId 只作为 iiop-ai 公共详情 API 的引用。
 
-涉及：
-
-1. 巡检 PHOTO 项；
-2. 巡检异常证据；
-3. 工单附件；
-4. HarmonyOS 图片。
-
-这个能力目前尚未写入 02-backend.md 的正式 API。
-
-在 05-roadmap.md 最终定稿前，必须回到 02-backend.md 补充：
-
-1. 上传 API；
-2. 存储目录；
-3. 文件 URL；
-4. 类型与大小校验；
-5. 静态资源访问；
-6. 删除策略；
-7. E 盘数据目录。
-
-除这一项外，当前客户端页面与 02-backend.md 的核心 API 能够对齐。
+如果真实后端实现必须改变上述契约，应先同步修改 02 和 03，再修改页面代码。
 
 ---
 
