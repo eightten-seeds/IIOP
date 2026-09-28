@@ -1,0 +1,55 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: iiop-gateway
+  config:
+    import:
+      - optional:nacos:iiop-shared.yaml?group=${NACOS_GROUP:IIOP_GROUP}
+      - optional:nacos:iiop-gateway.yaml?group=${NACOS_GROUP:IIOP_GROUP}
+  data:
+    redis:
+      host: ${REDIS_HOST:127.0.0.1}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+  cloud:
+    nacos:
+      discovery:
+        server-addr: ${NACOS_SERVER_ADDR:127.0.0.1:8848}
+        namespace: ${NACOS_NAMESPACE:996450af-6fc6-431b-9fbc-aa3966f9e856}
+        group: ${NACOS_GROUP:IIOP_GROUP}
+      config:
+        server-addr: ${NACOS_SERVER_ADDR:127.0.0.1:8848}
+        namespace: ${NACOS_NAMESPACE:996450af-6fc6-431b-9fbc-aa3966f9e856}
+        group: ${NACOS_GROUP:IIOP_GROUP}
+    gateway:
+      server:
+        webflux:
+          routes:
+            - id: auth-api
+              uri: lb://iiop-auth
+              predicates:
+                - Path=/api/auth/**
+            - id: auth-websocket
+              uri: lb:ws://iiop-auth
+              predicates:
+                - Path=/ws/**
+          globalcors:
+            cors-configurations:
+              '[/**]':
+                allowed-origin-patterns: ${IIOP_CORS_ORIGINS:http://localhost:5173,http://127.0.0.1:5173}
+                allowed-methods: [GET, POST, PUT, DELETE, OPTIONS]
+                allowed-headers: ['*']
+                allow-credentials: true
+                max-age: 3600
+    sentinel:
+      transport:
+        dashboard: ${SENTINEL_DASHBOARD:127.0.0.1:8858}
+        port: ${SENTINEL_TRANSPORT_PORT:8719}
+
+sa-token:
+  token-name: satoken
+  timeout: 7200
+  active-timeout: 1800
+  is-log: false
