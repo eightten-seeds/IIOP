@@ -860,18 +860,60 @@ Controller/Service 的用户业务入口使用：
 - `@SaCheckPermission`
 - 必要时 `@SaCheckRole`
 
-权限码使用稳定字符串。
+权限编码以 01-database.md 的 seed 清单为唯一基线。
 
-示例：
+固定权限：
 
+### 通用与设备
+
+- dashboard:view
 - device:view
 - device:create
 - device:update
+- device:delete
+
+### 巡检
+
+- inspection:view
+- inspection:template:manage
+- inspection:plan:manage
 - inspection:execute
-- maintenance:process
+- inspection:abnormal:process
+
+### 运维
+
+- maintenance:view
+- maintenance:alarm:process
+- maintenance:defect:process
+- maintenance:workorder:create
+- maintenance:workorder:process
+- maintenance:workorder:accept
+
+### AI
+
+- ai:view
 - ai:diagnosis
+- ai:confirm
+- ai:chat
+
+### 系统管理
+
 - system:user:view
+- system:user:create
 - system:user:update
+- system:user:delete
+- system:user:role
+- system:role:view
+- system:role:create
+- system:role:update
+- system:role:delete
+- system:role:permission
+- system:permission:view
+- system:permission:create
+- system:permission:update
+- system:permission:delete
+
+后续若需要新增权限码，必须先修改 01、02、03 的规范和 seed，再写代码。
 
 ## 12.7 Same-Token
 
@@ -933,7 +975,6 @@ Gateway 为转发请求增加 Sa-Token 官方 Same-Token Header。
 - `GET /internal/device/devices/{id}/context`
 - `GET /internal/inspection/devices/{id}/recent-history`
 - `GET /internal/maintenance/devices/{id}/history`
-- `GET /internal/ai/diagnoses/{id}/summary`
 
 Gateway 不路由 `/internal/**`。
 
@@ -954,7 +995,6 @@ Feign DTO 必须独立于 Entity。
 - productionLine
 - installLocation
 - currentMetrics
-- sopSummaries
 
 不得把 `DevDevice` Entity 直接作为 Feign 返回类型。
 
@@ -1126,7 +1166,7 @@ iiop-ai
 
 消费者：
 
-- iiop-maintenance
+- iiop-maintenance：仅处理与 defect/work-order 的 diagnosisId 关联，不同步查询 AI 详情
 - iiop-auth 通知逻辑
 
 ## 15.6 Spring Cloud Stream Binding 命名
@@ -1145,12 +1185,18 @@ iiop-ai
 消费函数：
 
 - `inspectionAbnormalConsumer`
+- `aiDiagnosisLinkConsumer`
 
 消费绑定：
 
 - `inspectionAbnormalConsumer-in-0`
-- destination：`iiop.inspection.abnormal`
-- group：`iiop-maintenance-abnormal-consumer`
+  - destination：`iiop.inspection.abnormal`
+  - group：`iiop-maintenance-abnormal-consumer`
+- `aiDiagnosisLinkConsumer-in-0`
+  - destination：`iiop.ai.diagnosis`
+  - group：`iiop-maintenance-ai-diagnosis-consumer`
+
+`aiDiagnosisLinkConsumer` 只处理 `AI_DIAGNOSIS_SUCCEEDED`。当 triggerType/triggerId 能定位 maintenance 中由同一异常或告警形成的 defect 时，写入 `mt_defect.ai_diagnosis_id`；已有工单时可同步补写 `mt_work_order.ai_diagnosis_id`。它不调用 iiop-ai 查询详情。
 
 生产绑定：
 
@@ -1198,6 +1244,7 @@ Spring Cloud Stream 使用函数式 Consumer/Function 模式。实际 `spring.cl
 示例：
 
 - `iiop-maintenance-abnormal-consumer`
+- `iiop-maintenance-ai-diagnosis-consumer`
 - `iiop-ai-abnormal-consumer`
 - `iiop-ai-alarm-consumer`
 - `iiop-auth-workorder-notification-consumer`
@@ -1545,6 +1592,92 @@ Controller 返回：
 
 DELETE 成功返回空 data 或 Boolean，整个项目保持统一。
 
+## 21.5 外部 ID 序列化契约
+
+数据库 Entity 和 Service 内部 ID 使用 `Long`。
+
+面向 PC/HarmonyOS 的外部 Request/VO 中，所有业务 ID 字段按字符串契约处理，避免 JavaScript Number 超出安全整数范围。
+
+规则：
+
+1. Entity 的 id、deviceId 等仍为 Long；
+2. 外部 VO 的 id、deviceId、taskId、workOrderId、diagnosisId 等使用 String，或在字段级显式使用 ToStringSerializer；
+3. 禁止配置“所有 Long 全局转字符串”，避免把分页 total、耗时等普通 Long 数值意外转换；
+4. 前端禁止 parseInt 业务 ID；
+5. 内部 Feign DTO 可以继续使用 Long，因为调用双方均为 Java 服务；
+6. PageResult.total 保持数值语义。
+
+## 21.6 附件上传与本地存储契约
+
+第一版不新增文件微服务。文件物理根目录固定：
+
+`E:/IIOP-data/uploads/`
+
+业务服务只处理自己领域的附件。
+
+### inspection
+
+上传：
+
+`POST /api/inspection/attachments/images`
+
+请求：
+
+`multipart/form-data`，字段名 `file`。
+
+读取：
+
+`GET /api/inspection/attachments/{fileKey}`
+
+用途：
+
+- PHOTO 巡检项；
+- ins_task_item.evidence_urls；
+- ins_abnormal.evidence_urls。
+
+### maintenance
+
+上传：
+
+`POST /api/maintenance/attachments/images`
+
+读取：
+
+`GET /api/maintenance/attachments/{fileKey}`
+
+用途：
+
+- 工单处理图片；
+- mt_work_order_log.attachments。
+
+### AttachmentVO
+
+返回至少：
+
+- fileKey
+- originalName
+- contentType
+- size
+- url
+
+其中 url 为经过 Gateway 的业务 URL，例如 `/api/inspection/attachments/{fileKey}`。
+
+安全规则：
+
+1. 只允许 image/jpeg、image/png、image/webp；
+2. 单文件上限第一版为 10 MiB；
+3. 服务端生成 UUID 或等价不可预测文件名；
+4. 禁止使用用户原始文件名作为物理路径；
+5. 必须规范化并校验目录，阻止路径穿越；
+6. 文件存放在 `E:/IIOP-data/uploads/inspection/` 或 `maintenance/`；
+7. GET 仍要求正常 Sa-Token 登录和 Same-Token 网关链路；
+8. 前端需要显示图片时，通过带 Token 的请求读取 Blob/字节，不假设匿名静态资源；
+9. 业务 JSON 只保存返回 URL，不保存 base64 或二进制；
+10. 第一版不提供物理删除 API，用户在业务提交前先完成本地选择，确认提交时再上传，尽量减少孤儿文件；
+11. 项目运行目录和上传目录不得进入 Git。
+
+iiop-common 可以提供纯 Java 的安全文件名、路径规范化、MIME/大小校验和本地存储抽象；业务 Controller、业务权限和目录配置保留在 inspection/maintenance 服务。
+
 ---
 
 # 22. iiop-auth API
@@ -1720,6 +1853,12 @@ DELETE 成功返回空 data 或 Boolean，整个项目保持统一。
 
 返回适合图表的数据 DTO，不返回 Entity。
 
+实时监测和设备摘要使用：
+
+### GET /api/device/devices/{deviceId}/metric-snapshot
+
+一次返回该设备各启用指标的最新值、单位、采集时间和阈值摘要，避免前端按指标逐个轮询。
+
 ## 23.5 SOP
 
 - GET /api/device/sops
@@ -1740,15 +1879,20 @@ DELETE 成功返回空 data 或 Boolean，整个项目保持统一。
 
 面向 inspection、maintenance、ai。
 
-AI 可另用：
+AI 使用两个明确的只读内部契约：
 
 ### GET /internal/device/devices/{id}/ai-context
 
 包含：
 
 - device summary；
-- 当前或近期关键指标；
-- 相关 SOP 摘要。
+- 当前或近期关键指标摘要。
+
+### GET /internal/device/devices/{id}/sop-context
+
+只返回与该设备相关且状态为 EFFECTIVE 的 SOP 摘要/受控内容，优先设备专属，再按设备分类匹配。
+
+这样 LangGraph4j 的 LOAD_DEVICE 与 LOAD_SOP 节点具有独立、可审计的数据来源。
 
 禁止让 AI 服务直接查 iiop_device。
 
@@ -1810,6 +1954,14 @@ flow 保存 Vue Flow JSON。
 - startDate
 - endDate
 
+`GET /api/inspection/abnormals` 至少支持：
+
+- deviceId
+- severity
+- status
+- startDate
+- endDate
+
 INSPECTOR 默认只能执行分配给自己的任务，管理员可查看全部。
 
 ## 24.5 异常
@@ -1844,6 +1996,8 @@ INSPECTOR 默认只能执行分配给自己的任务，管理员可查看全部�
 
 ## 25.1 告警
 
+`GET /api/maintenance/alarms` 至少支持 deviceId、alarmLevel、status、startTime、endTime、pageNum、pageSize。
+
 - GET /api/maintenance/alarms
 - GET /api/maintenance/alarms/{id}
 - POST /api/maintenance/alarms/manual
@@ -1853,6 +2007,8 @@ INSPECTOR 默认只能执行分配给自己的任务，管理员可查看全部�
 
 ## 25.2 缺陷
 
+`GET /api/maintenance/defects` 至少支持 deviceId、severity、status、sourceType、pageNum、pageSize。
+
 - GET /api/maintenance/defects
 - GET /api/maintenance/defects/{id}
 - POST /api/maintenance/defects/manual
@@ -1861,6 +2017,8 @@ INSPECTOR 默认只能执行分配给自己的任务，管理员可查看全部�
 - POST /api/maintenance/defects/{id}/close
 
 ## 25.3 工单
+
+`GET /api/maintenance/work-orders` 至少支持 keyword、deviceId、priority、status、assigneeUserId、startTime、endTime、pageNum、pageSize。
 
 - GET /api/maintenance/work-orders
 - GET /api/maintenance/work-orders/{id}
@@ -1877,6 +2035,8 @@ INSPECTOR 默认只能执行分配给自己的任务，管理员可查看全部�
 - GET /api/maintenance/work-orders/{id}/logs
 
 每个动作严格校验 `01-database.md` 状态机。
+
+从 defect 创建工单时，如果 defect 已通过 AI_DIAGNOSIS_SUCCEEDED 事件关联 `ai_diagnosis_id`，工单默认继承该 diagnosisId。maintenance 只保存引用，不同步读取 AI 详情。
 
 ## 25.4 统计
 
@@ -1905,6 +2065,12 @@ INSPECTOR 默认只能执行分配给自己的任务，管理员可查看全部�
 
 AI 业务细节以 `04-ai.md` 为准。
 
+`POST /api/ai/diagnoses` 的 MANUAL 请求至少包含：
+
+- deviceId
+- abnormalSummary
+- description，可选，对应 ai_diagnosis.user_description
+
 后端路由先固定：
 
 - POST /api/ai/chat
@@ -1916,10 +2082,6 @@ AI 业务细节以 `04-ai.md` 为准。
 - GET /api/ai/diagnoses/{id}/workflow
 - POST /api/ai/diagnoses/{id}/confirm
 - POST /api/ai/diagnoses/{id}/reject
-
-内部：
-
-- GET /internal/ai/diagnoses/{id}/summary
 
 确认和拒绝必须记录：
 
