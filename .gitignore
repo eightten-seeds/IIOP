@@ -1,0 +1,43 @@
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+
+# Java / Maven
+**/target/
+.mvn/wrapper/maven-wrapper.jar
+*.log
+
+# Node / Vue
+node_modules/
+dist/
+.vite/
+npm-debug.log*
+
+# HarmonyOS
+**/.hvigor/
+**/build/
+**/entry/build/
+**/.idea/
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+application-local.*
+application-*.local.*
+
+# Runtime data and uploads
+logs/
+uploads/
+data/
+runtime-data/
+*.tmp
+*.temp
+*.swp
+Thumbs.db
+
+# OS
+.DS_Store
