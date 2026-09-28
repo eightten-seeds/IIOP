@@ -1268,7 +1268,7 @@ Spring Cloud Stream 使用函数式 Consumer/Function 模式。实际 `spring.cl
 
 重要事件只能在本地数据库事务成功后发送。
 
-第一版不引入 Seata，不引入复杂 Outbox 基础设施。
+第一版不引入额外的复杂分布式事务或事件基础设施。
 
 实现原则：
 
