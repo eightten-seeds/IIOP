@@ -30,7 +30,7 @@ Codex 在 M1 阶段生成 SQL，以及后续生成 Entity、Mapper、Service、D
 | `iiop_device` | iiop-device | 设备、指标、监测数据、SOP |
 | `iiop_inspection` | iiop-inspection | 巡检模板、计划、任务、异常 |
 | `iiop_maintenance` | iiop-maintenance | 告警、缺陷、工单、维修、验收 |
-| `iiop_ai` | iiop-ai | AI 会话、诊断、工作流轨迹 |
+| `iiop_ai` | iiop-ai | AI 诊断、工作流轨迹 |
 
 `iiop-gateway` 和 `iiop-common` 不拥有业务数据库。
 
