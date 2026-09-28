@@ -46,4 +46,4 @@ IIOP 面向工业设备巡检与运维场景，计划建设由微服务后端、
 
 第一版控制复杂度：5 个逻辑数据库、25 张业务表；AI 只保留 DeepSeek + LangChain4j + LangGraph4j 5 节点诊断；WebSocket 使用原生 JSON 通知；不增加与主业务无关的额外子系统或微服务。
 
-M1 数据库 SQL 已完成，M2-A 环境准备已完成。当前按照 `05-roadmap.md` 的压缩路线执行 S1 基础设施；S1 通过后进入 S2 后端核心。
+S1 基础设施已经实机验收 PASS：MySQL/25 张业务表、Redis、Nacos、RocketMQ、Sentinel 均已可用。当前按照 `05-roadmap.md` 进入 S2-A：common + auth + gateway。
