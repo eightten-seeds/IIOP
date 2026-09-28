@@ -1231,9 +1231,15 @@ iiop-ai
 
 分别消费：
 
-- `iiop.maintenance.alarm`
-- `iiop.maintenance.workorder`
-- `iiop.ai.diagnosis`
+- `alarmNotificationConsumer-in-0`
+  - destination：`iiop.maintenance.alarm`
+  - group：`iiop-auth-alarm-notification-consumer`
+- `workorderNotificationConsumer-in-0`
+  - destination：`iiop.maintenance.workorder`
+  - group：`iiop-auth-workorder-notification-consumer`
+- `aiNotificationConsumer-in-0`
+  - destination：`iiop.ai.diagnosis`
+  - group：`iiop-auth-ai-notification-consumer`
 
 Spring Cloud Stream 使用函数式 Consumer/Function 模式。实际 `spring.cloud.function.definition` 和 bindings 配置按本节名称生成。
 
@@ -1247,6 +1253,7 @@ Spring Cloud Stream 使用函数式 Consumer/Function 模式。实际 `spring.cl
 - `iiop-maintenance-ai-diagnosis-consumer`
 - `iiop-ai-abnormal-consumer`
 - `iiop-ai-alarm-consumer`
+- `iiop-auth-alarm-notification-consumer`
 - `iiop-auth-workorder-notification-consumer`
 - `iiop-auth-ai-notification-consumer`
 
@@ -1621,6 +1628,10 @@ DELETE 成功返回空 data 或 Boolean，整个项目保持统一。
 
 `POST /api/inspection/attachments/images`
 
+权限：
+
+- inspection:execute 或 inspection:abnormal:process
+
 请求：
 
 `multipart/form-data`，字段名 `file`。
@@ -1628,6 +1639,8 @@ DELETE 成功返回空 data 或 Boolean，整个项目保持统一。
 读取：
 
 `GET /api/inspection/attachments/{fileKey}`
+
+读取至少要求登录，并结合 inspection:view / inspection:execute 做领域授权。
 
 用途：
 
@@ -1641,9 +1654,15 @@ DELETE 成功返回空 data 或 Boolean，整个项目保持统一。
 
 `POST /api/maintenance/attachments/images`
 
+权限：
+
+- maintenance:workorder:process
+
 读取：
 
 `GET /api/maintenance/attachments/{fileKey}`
+
+读取至少要求 maintenance:view。
 
 用途：
 
@@ -1674,7 +1693,8 @@ DELETE 成功返回空 data 或 Boolean，整个项目保持统一。
 8. 前端需要显示图片时，通过带 Token 的请求读取 Blob/字节，不假设匿名静态资源；
 9. 业务 JSON 只保存返回 URL，不保存 base64 或二进制；
 10. 第一版不提供物理删除 API，用户在业务提交前先完成本地选择，确认提交时再上传，尽量减少孤儿文件；
-11. 项目运行目录和上传目录不得进入 Git。
+11. 项目运行目录和上传目录不得进入 Git；
+12. 附件 GET 返回二进制响应，是统一 Result<VO> JSON 契约的明确例外；错误响应仍使用统一业务错误结构。
 
 iiop-common 可以提供纯 Java 的安全文件名、路径规范化、MIME/大小校验和本地存储抽象；业务 Controller、业务权限和目录配置保留在 inspection/maintenance 服务。
 
@@ -1769,11 +1789,11 @@ iiop-common 可以提供纯 Java 的安全文件名、路径规范化、MIME/大
 
 ## 22.6 权限
 
-- GET /api/auth/permissions/tree
-- GET /api/auth/permissions
-- POST /api/auth/permissions
-- PUT /api/auth/permissions/{id}
-- DELETE /api/auth/permissions/{id}
+- GET /api/auth/permissions/tree → system:permission:view
+- GET /api/auth/permissions → system:permission:view
+- POST /api/auth/permissions → system:permission:create
+- PUT /api/auth/permissions/{id} → system:permission:update
+- DELETE /api/auth/permissions/{id} → system:permission:delete
 
 ## 22.7 通知
 
