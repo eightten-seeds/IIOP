@@ -26,7 +26,7 @@ Codex 在 M1 阶段生成 SQL，以及后续生成 Entity、Mapper、Service、D
 
 | 逻辑数据库 | 数据所有者 | 主要内容 |
 |---|---|---|
-| `iiop_auth` | iiop-auth | 用户、角色、权限、通知、审计 |
+| `iiop_auth` | iiop-auth | 用户、角色、权限、通知 |
 | `iiop_device` | iiop-device | 设备、指标、监测数据、SOP |
 | `iiop_inspection` | iiop-inspection | 巡检模板、计划、任务、异常 |
 | `iiop_maintenance` | iiop-maintenance | 告警、缺陷、工单、维修、验收 |
@@ -794,7 +794,6 @@ NUMBER 类型允许设置上下限。
 - IN_PROGRESS
 - COMPLETED
 - CANCELLED
-- OVERDUE
 
 `result_status`：
 
@@ -815,7 +814,7 @@ NUMBER 类型允许设置上下限。
 - PENDING → IN_PROGRESS；
 - IN_PROGRESS → COMPLETED；
 - PENDING/IN_PROGRESS → CANCELLED（需业务权限）；
-- 超过计划时间且未完成可标记 OVERDUE。
+- 超过计划截止时间且仍未完成时，将 overdue_flag 标记为 1；task_status 保持 PENDING 或 IN_PROGRESS。
 
 ---
 
@@ -1850,7 +1849,7 @@ M1 只实现数据库 SQL。
 - 运行数据库迁移；
 - 自行增加数据库；
 - 自行增加微服务；
-- 自行改变 28 张表的范围。
+- 自行改变 27 张表的范围。
 
 如果发现本文档存在无法实现或明显冲突的地方，Codex 应停止并报告，不应自行修改架构。
 
