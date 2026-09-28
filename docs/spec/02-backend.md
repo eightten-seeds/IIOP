@@ -568,9 +568,11 @@ Java 类型：
 
 # 10. Nacos 注册发现与配置管理
 
+第一版只实现能够证明 Nacos 被真实使用的最小闭环，不做生产级配置治理。
+
 ## 10.1 Namespace 和 Group
 
-开发环境建议建立独立 Namespace：
+开发环境使用独立 Namespace：
 
 `iiop-dev`
 
@@ -578,120 +580,62 @@ Group：
 
 `IIOP_GROUP`
 
-不要把项目配置散落在 DEFAULT_GROUP。
+服务必须能够注册到该 namespace/group。
 
-生产概念只做设计，不要求课程项目真正部署生产集群。
+## 10.2 application.yml
 
-## 10.2 application.yml 的职责
-
-每个可启动服务本地 `application.yml` 只保留启动 Nacos 所必需的信息和安全默认值：
+本地 `application.yml` 可以保留：
 
 - spring.application.name；
 - server.port；
 - Nacos server address；
-- namespace；
-- group；
+- namespace/group；
 - `spring.config.import`；
 - profile；
-- 极少量无法从 Nacos 获取的启动前配置。
+- 安全的非敏感默认值；
+- 环境变量占位符。
 
-业务配置放 Nacos。
+不再要求把所有业务配置强制搬到 Nacos。
 
-## 10.3 配置导入
+真实密码、Token、DeepSeek Key 等 Secret 仍然只能通过环境变量或本地未提交配置提供。
 
-Spring Cloud Alibaba 2025.x 使用：
+## 10.3 配置中心最小要求
+
+Spring Cloud Alibaba 2025.x 继续使用：
 
 `spring.config.import`
 
-禁止以 `bootstrap.yml` 作为正式方案。
+禁止使用 `bootstrap.yml` 作为正式方案。
 
-每个服务建议显式导入：
+第一版只需证明 Config Center 能被真实读取：
 
-1. `iiop-shared.yaml`
-2. 自己的服务配置文件，例如 `iiop-auth.yaml`
+1. 至少使用一个项目 DataId；
+2. 推荐使用 `iiop-shared.yaml` 保存跨服务的非敏感开发配置或默认值；
+3. 服务专属 DataId 仅在确实能减少重复配置时再增加；
+4. 不要求动态刷新、灰度、版本治理、配置回滚或高可用演练。
 
-例如 auth：
+示例：
 
 ```yaml
 spring:
-  application:
-    name: iiop-auth
-
-  cloud:
-    nacos:
-      discovery:
-        server-addr: ${NACOS_SERVER_ADDR:127.0.0.1:8848}
-        namespace: ${NACOS_NAMESPACE:}
-        group: ${NACOS_GROUP:IIOP_GROUP}
-      config:
-        server-addr: ${NACOS_SERVER_ADDR:127.0.0.1:8848}
-        namespace: ${NACOS_NAMESPACE:}
-        group: ${NACOS_GROUP:IIOP_GROUP}
-
   config:
     import:
-      - nacos:iiop-shared.yaml?group=${NACOS_GROUP:IIOP_GROUP}
-      - nacos:iiop-auth.yaml?group=${NACOS_GROUP:IIOP_GROUP}
+      - optional:nacos:iiop-shared.yaml?group=${NACOS_GROUP:IIOP_GROUP}
 ```
 
-M2 真正实现时若 namespace 的实际 ID 与名称不同，以 Nacos 控制台创建后得到的 namespace ID 为准，并通过环境变量传入。
+实际 namespace ID 通过 `NACOS_NAMESPACE` 环境变量传入，不把本机 UUID 固化到仓库。
 
-## 10.4 Nacos 配置内容
+## 10.4 敏感变量
 
-### iiop-shared.yaml
-
-只放跨服务共享配置：
-
-- Redis 地址；
-- Sa-Token 通用参数； 暴露范围；
-- 基础日志级别；
-- 通用超时。
-
-### iiop-auth.yaml
-
-- iiop_auth datasource；
-- WebSocket；
-- auth 专属配置。
-
-### iiop-device.yaml
-
-- iiop_device datasource；
-- 设备缓存 TTL。
-
-### iiop-inspection.yaml
-
-- iiop_inspection datasource；
-- RocketMQ binding；
-- 计划调度参数。
-
-### iiop-maintenance.yaml
-
-- iiop_maintenance datasource；
-- RocketMQ binding。
-
-### iiop-ai.yaml
-
-- iiop_ai datasource；
-- RocketMQ；
-- DeepSeek/LangChain4j/LangGraph4j 配置。
-
-### iiop-gateway.yaml
-
-- Gateway routes；
-- CORS；
-- Sentinel；
-- Gateway timeout。
-
-## 10.5 敏感变量
-
-不得在 Git 和 Nacos 示例文件中写真实：
+不得在 Git 或可提交的 Nacos 示例文件中写真实：
 
 - MYSQL_PASSWORD
 - REDIS_PASSWORD
 - DeepSeek API Key
+- Same-Token Secret
 - 其他 Secret
 
-Nacos 配置使用环境变量占位符。
+本项目不测试 Nacos 配置中心的生产级容灾、热更新或配置删除故障场景。
 
 ---
 
@@ -1001,51 +945,46 @@ AI 获取上下文时，非关键历史接口超时可以降级为空列表。
 
 # 14. Redis 设计
 
-## 14.1 使用范围
+第一版 Redis 只实现当前业务确实使用到的能力。
 
-Redis 只用于：
+## 14.1 必做范围
 
-1. Sa-Token 分布式会话；
+1. Sa-Token 分布式 Session；
 2. 权限快照；
-3. 设备实时状态；
-4. Dashboard 短缓存；
-5. MQ 幂等；
-6. 分布式短锁；
-7. WebSocket 在线辅助状态。
+3. RocketMQ 消费幂等 Key。
 
-不保存唯一业务事实。
+可选：
+
+- Dashboard 短缓存；
+- 设备最新状态短缓存。
+
+只有在真实页面或接口出现重复查询需要时才增加可选缓存。
+
+第一版不实现通用分布式锁体系，也不建立多级缓存框架。
 
 ## 14.2 Key 规范
 
-统一前缀：
+项目自定义 Key 使用统一前缀：
 
 `iiop:`
 
-业务 Key：
+当前允许的典型 Key：
 
 ```text
-iiop:device:status:{deviceId}
-iiop:dashboard:device-overview
-iiop:dashboard:inspection-overview
-iiop:dashboard:maintenance-overview
 iiop:event:consumed:{consumer}:{eventId}
-iiop:lock:inspection-plan:{planId}
-iiop:ws:user:{userId}
+iiop:device:status:{deviceId}
+iiop:dashboard:{name}
 ```
 
-Sa-Token 自身 Key 使用框架默认命名，不自行重复造一套 Session Key。
+Sa-Token Session Key 使用框架默认命名。
 
 ## 14.3 TTL
 
-建议：
+- MQ 幂等 Key：课程项目固定 7 天即可；
+- 设备状态：只有实际使用时设置 1-5 分钟；
+- Dashboard：只有实际使用时设置 30-60 秒。
 
-- Dashboard：30-60 秒；
-- 设备实时状态：1-5 分钟，根据采集频率决定；
-- MQ 幂等：至少覆盖消息可能重试周期，课程项目先设 7 天；
-- 分布式锁：必须设置短 TTL；
-- WebSocket 在线状态：连接期间维护。
-
-不要设置永久缓存替代数据库。
+Redis 不保存唯一业务事实。Redis 暂时不可用时，数据库仍是业务事实来源。
 
 ---
 
@@ -1281,50 +1220,44 @@ Spring Cloud Stream 使用函数式 Consumer/Function 模式。实际 `spring.cl
 
 # 16. Sentinel 设计
 
+Sentinel 只做最小技术展示，不建立复杂流控体系。
+
 ## 16.1 依赖
 
-普通服务：
+普通服务按实际需要引入：
 
 `spring-cloud-starter-alibaba-sentinel`
 
-Gateway：
-
-在普通 Sentinel starter 基础上增加：
+Gateway 使用：
 
 `spring-cloud-alibaba-sentinel-gateway`
 
-## 16.2 保护对象
+## 16.2 第一版保护范围
 
-第一版重点：
+必须完成一个可演示的 Gateway 限流规则。
 
-1. Gateway 总入口；
-2. `POST /api/auth/login`；
-3. `/api/ai/**`；
-4. `POST /api/device/metric-data`；
-5. Dashboard 统计接口；
-6. 必要的 Feign 下游调用。
+优先选择：
 
-## 16.3 规则原则
+- `POST /api/auth/login`；或
+- `/api/ai/**`。
 
-规则必须可解释。
+其余接口只有真实需要时再增加规则。
 
-示例目标：
-
-- 防止登录接口暴力高频访问；
-- 防止 AI 调用快速耗尽模型额度；
-- 防止监测数据瞬时写入压垮数据库；
-- 防止 Dashboard 高频刷新重复聚合。
-
-具体 QPS 数值在真实联调后确定，规范中不提前伪造性能数据。
-
-## 16.4 降级响应
+## 16.3 返回
 
 被 Sentinel Block 时：
 
-- HTTP 状态使用 429；
-- Result.code 使用 429xx；
-- message 为明确的“请求过于频繁，请稍后再试”；
-- AI 场景不能伪装成模型成功。
+- HTTP 429；
+- 统一业务错误结构；
+- message 明确说明请求过于频繁。
+
+第一版不做：
+
+- 大量接口分别配置规则；
+- 动态规则推送体系；
+- 熔断矩阵；
+- Sentinel 集群流控；
+- 生产级压测参数调优。
 
 ---
 
