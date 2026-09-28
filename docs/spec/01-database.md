@@ -1379,8 +1379,6 @@ WAITING_ACCEPTANCE → PROCESSING
 | maintenance | mt_work_order.assignee_user_id | auth |
 | maintenance | mt_work_order.ai_diagnosis_id | ai |
 | maintenance | 日志/维修/验收用户字段 | auth |
-| ai | ai_session.user_id | auth |
-| ai | ai_session.device_id | device |
 | ai | ai_diagnosis.device_id | device |
 | ai | ai_diagnosis.confirmed_by | auth |
 
