@@ -8,7 +8,7 @@
 
 ## 规范优先级
 
-第一版开发规范已经完成 G0 收口并冻结：
+第一版开发规范已经完成简化版 G0 收口并冻结：
 
 1. `docs/spec/00-overview.md`：系统范围、服务边界和总体架构；
 2. `docs/spec/01-database.md`：数据库事实来源；
@@ -38,6 +38,7 @@
 ## 微服务与数据边界
 
 - 可启动服务固定为 `iiop-gateway`、`iiop-auth`、`iiop-device`、`iiop-inspection`、`iiop-maintenance`、`iiop-ai`。
+- 数据库固定 5 个逻辑库、25 张业务表。
 - `iiop-common` 是普通 Jar，不启动。
 - 每个业务服务只能直接访问自己的逻辑数据库。
 - 跨服务同步调用使用明确的 Feign DTO。
@@ -61,6 +62,8 @@
 - 禁止提交真实 API Key、数据库密码、Redis 密码、Token、Same-Token Secret 或其他 Secret。
 - 使用环境变量和可提交的示例配置。
 - 禁止日志输出完整 Token、密码、DeepSeek Key 或敏感请求体。
+- AI 只实现结构化辅助诊断，不实现聊天助手、RAG、Tool Calling、多智能体或自治 Agent。
+- LangGraph4j 固定 5 节点：LOAD_CONTEXT → ANALYZE_WITH_DEEPSEEK → RISK_CHECK → GENERATE_ADVICE → PREPARE_WORK_ORDER_DRAFT。
 - AI 不得直接控制设备、修改工业参数或绕过人工确认。
 - 测试 Stub 必须与正式实现明确隔离，不得在最终运行路径返回伪造成功结果。
 
@@ -80,4 +83,6 @@
 - 不删除测试来规避错误。
 - 不伪造运行结果、性能数据、测试通过记录或 Git 历史。
 - 重要架构变更只有在明确批准后才同步修改 spec。
+- 原生 WebSocket 只用于 JSON 通知，不引入 STOMP。
+- 第一版不引入 Actuator、对象存储、向量数据库、Seata、RabbitMQ 等额外组件。
 - 最终正式材料只有团队项目实训报告、个人实训报告、答辩 PPT 和答辩讲稿，其内容必须基于真实最终代码和测试结果。
