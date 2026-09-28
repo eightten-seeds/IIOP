@@ -894,6 +894,7 @@ NUMBER 类型允许设置上下限。
 - reported_by BIGINT
 - reported_at DATETIME
 - status VARCHAR(32)
+- ai_diagnosis_id BIGINT NULL
 - resolved_at DATETIME NULL
 - created_at DATETIME
 - updated_at DATETIME
@@ -1043,7 +1044,15 @@ NUMBER 类型允许设置上下限。
 - INDEX(device_id, status)
 - INDEX(severity, status)
 - INDEX(source_type, source_id)
+- INDEX(ai_diagnosis_id)
 - INDEX(reported_at)
+
+业务规则：
+
+- 巡检异常事件创建 defect 后，后续 AI_DIAGNOSIS_SUCCEEDED 事件可把对应 diagnosisId 关联到 ai_diagnosis_id；
+- maintenance 不同步调用 ai；
+- 从 defect 创建工单时，如果 ai_diagnosis_id 已存在，则默认复制到 mt_work_order.ai_diagnosis_id；
+- MANUAL defect 的 source_id 可以为空。
 
 ---
 
@@ -1293,6 +1302,7 @@ WAITING_ACCEPTANCE → PROCESSING
 - trigger_id BIGINT NULL
 - device_id BIGINT
 - abnormal_summary VARCHAR(2000)
+- user_description VARCHAR(2000) NULL
 - risk_level VARCHAR(32) NULL
 - possible_causes JSON NULL
 - investigation_steps JSON NULL
@@ -1339,8 +1349,8 @@ WAITING_ACCEPTANCE → PROCESSING
 约束与索引：
 
 - UNIQUE(diagnosis_code)
+- UNIQUE(trigger_type, trigger_id)
 - INDEX(device_id, created_at)
-- INDEX(trigger_type, trigger_id)
 - INDEX(diagnosis_status)
 - INDEX(confirmation_status)
 
@@ -1350,7 +1360,9 @@ WAITING_ACCEPTANCE → PROCESSING
 - 调用失败或 JSON 校验失败标记 FAILED；
 - AI 输出不能直接改变设备控制状态；
 - 只有人工操作才能将 confirmation_status 改为 CONFIRMED/REJECTED；
-- context_snapshot 用于保存当次诊断使用的必要上下文快照，便于追溯。
+- context_snapshot 用于保存当次诊断使用的必要上下文快照，便于追溯；
+- MANUAL 诊断的 trigger_id 为 NULL。MySQL 唯一索引允许多条 NULL，因此可以重复发起人工诊断；
+- INSPECTION_ABNORMAL 和 ALARM 的 trigger_type + trigger_id 唯一，作为事件幂等的数据库兜底。
 
 ---
 
@@ -1416,6 +1428,7 @@ WAITING_ACCEPTANCE → PROCESSING
 | maintenance | mt_alarm.metric_id | device |
 | maintenance | mt_defect.device_id | device |
 | maintenance | mt_defect.reported_by | auth |
+| maintenance | mt_defect.ai_diagnosis_id | ai |
 | maintenance | mt_work_order.device_id | device |
 | maintenance | mt_work_order.creator_user_id | auth |
 | maintenance | mt_work_order.assignee_user_id | auth |
@@ -1617,21 +1630,93 @@ M1 的 `06_seed_data.sql` 只生成演示数据，不生成真实账号密码。
 
 ## 14.2 权限
 
-至少生成后续可以使用的基础权限编码，例如：
+M1 固定插入以下权限编码。后端注解、PC 路由和按钮、HarmonyOS 功能都必须使用同一组编码，禁止后续自行发明近义权限码。
+
+### 通用与设备
 
 - dashboard:view
 - device:view
 - device:create
 - device:update
+- device:delete
+
+### 巡检
+
+- inspection:view
+- inspection:template:manage
+- inspection:plan:manage
+- inspection:execute
+- inspection:abnormal:process
+
+### 运维
+
+- maintenance:view
+- maintenance:alarm:process
+- maintenance:defect:process
+- maintenance:workorder:create
+- maintenance:workorder:process
+- maintenance:workorder:accept
+
+### AI
+
+- ai:view
+- ai:diagnosis
+- ai:confirm
+- ai:chat
+
+### 系统管理
+
+- system:user:view
+- system:user:create
+- system:user:update
+- system:user:delete
+- system:user:role
+- system:role:view
+- system:role:create
+- system:role:update
+- system:role:delete
+- system:role:permission
+- system:permission:view
+- system:permission:create
+- system:permission:update
+- system:permission:delete
+
+### 预置角色的基础授权
+
+SUPER_ADMIN：
+
+- 拥有全部权限。
+
+ADMIN：
+
+- 拥有全部业务域权限；
+- 拥有用户、角色和权限管理能力。
+
+INSPECTOR：
+
+- dashboard:view
+- device:view
 - inspection:view
 - inspection:execute
-- maintenance:view
-- maintenance:process
+- ai:view
 - ai:diagnosis
-- system:user
-- system:role
+- ai:chat
 
-数量保持适中，不在 M1 提前铺满所有按钮权限。
+MAINTAINER：
+
+- device:view
+- maintenance:view
+- maintenance:alarm:process
+- maintenance:defect:process
+- maintenance:workorder:create
+- maintenance:workorder:process
+- maintenance:workorder:accept
+- ai:view
+- ai:diagnosis
+- ai:confirm
+- ai:chat
+
+06_seed_data.sql 应同时插入角色、权限以及上述角色权限关系。SUPER_ADMIN 的全部权限关系必须来自 sys_role_permission，不通过“角色名硬编码绕过 RBAC”。
 
 ## 14.3 设备分类
 
