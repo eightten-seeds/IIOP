@@ -113,11 +113,10 @@ IIOP 最终必须形成以下完整链路：
 - LangGraph4j 具体版本；
 - Vue、Vite、Element Plus 等前端依赖的具体小版本；
 - HarmonyOS API Level 和 DevEco Studio 具体版本；
-- DeepSeek 最终使用的模型名称；
-- 本地基础设施采用原生安装还是 Docker；
-- 是否增加对象存储、向量数据库或其他中间件。
+- DeepSeek 最终使用 deepseek-flash 或经确认的兼容模型；
+- 本地基础设施采用原生安装还是 Docker，以本机现有环境和 E 盘约束为准。
 
-Codex 不得为了“完整”而提前猜这些版本或额外引入组件。
+第一版明确不增加向量数据库、对象存储、MCP、多智能体、Seata、RabbitMQ 等额外组件。Codex 不得为了“完整”自行扩展技术栈。
 
 ---
 
@@ -381,8 +380,7 @@ AI 诊断是对异常或告警的辅助分析记录。
 - 风险检查；
 - 维修建议；
 - 工作流节点轨迹；
-- 人工确认；
-- AI 会话记录。
+- 人工确认。
 
 ### 6.6 数据可视化
 
@@ -625,12 +623,10 @@ iiop-common 为普通 Jar，不启动。
 
 负责：
 
-- AI 会话；
-- AI 消息；
 - AI 诊断；
 - DeepSeek 调用；
-- LangChain4j 集成；
-- LangGraph4j 流程编排；
+- LangChain4j 模型接入；
+- LangGraph4j 5 节点诊断流程；
 - 工作流轨迹；
 - 诊断人工确认。
 
@@ -897,57 +893,55 @@ WebSocket 用于实时通知。
 
 ## 15. AI 架构边界
 
+第一版 AI 只做工业设备辅助诊断，不实现通用 AI 助手、聊天记忆、Tool Calling、RAG、向量数据库或自治 Agent。
+
 ### 15.1 DeepSeek
 
-负责基于给定上下文进行自然语言推理与结构化故障分析。
+负责：
+
+- 根据设备、监测、巡检、维修和 SOP 上下文进行故障分析；
+- 输出风险等级；
+- 输出可能原因和证据；
+- 输出排查步骤；
+- 输出维修建议和安全提示。
+
+DeepSeek 不直接查询数据库，不直接创建工单，不直接控制设备。
 
 ### 15.2 LangChain4j
 
-负责：
+只负责 Java 侧模型接入：
 
-- DeepSeek OpenAI Compatible API 接入；
-- Prompt 管理；
-- Chat Memory；
-- Tool 调用；
-- 结构化输出解析。
+- 创建 DeepSeek ChatModel；
+- 构造 SystemMessage/UserMessage；
+- 发送模型请求；
+- 获取模型最终输出；
+- 读取可用的 TokenUsage。
+
+第一版不使用 Chat Memory、AI Assistant、@Tool 或 Tool Calling。
 
 ### 15.3 LangGraph4j
 
-负责：
+固定 5 节点：
 
-- 多节点诊断流程；
-- 节点状态；
-- 条件分支；
-- 工作流执行轨迹；
-- 错误节点记录。
-
-第一版计划节点：
-
-LOAD_DEVICE  
-→ LOAD_INSPECTION_HISTORY  
-→ LOAD_MAINTENANCE_HISTORY  
-→ LOAD_SOP  
-→ ANALYZE_WITH_DEEPSEEK  
-→ RISK_CHECK  
-→ GENERATE_ADVICE  
+~~~text
+LOAD_CONTEXT
+→ ANALYZE_WITH_DEEPSEEK
+→ RISK_CHECK
+→ GENERATE_ADVICE
 → PREPARE_WORK_ORDER_DRAFT
+~~~
+
+其中 LOAD_CONTEXT 一次完成设备、巡检历史、维修历史和 SOP 的只读聚合。
 
 ### 15.4 AI 安全边界
 
-AI 只提供辅助分析。
+- AI 只提供辅助判断；
+- HIGH/CRITICAL 建议必须人工确认；
+- PREPARE_WORK_ORDER_DRAFT 只生成工单建议，不创建真实工单；
+- 不保存或展示模型 reasoning_content；
+- DeepSeek 不可用时不影响设备、巡检、缺陷和工单基础业务。
 
-AI 不得自动：
-
-- 停机；
-- 启动设备；
-- 修改工业控制参数；
-- 执行维修动作；
-- 判定已经维修完成；
-- 绕过人工审批。
-
-所有高风险建议必须要求人工确认。
-
-模型无法获得充分上下文时，必须允许输出“信息不足”，不得强制生成确定结论。
+具体实现以 04-ai.md 为准。
 
 ---
 
@@ -1338,12 +1332,12 @@ Codex 不负责：
 
 ## 28. 当前阶段
 
-当前仓库已经完成 M0 工程初始化。
+当前仓库已经完成 M0 工程初始化和简化版规范收口。
 
-下一阶段在数据库规范确认后进入 M1：
+下一阶段进入 M1：
 
 - 创建五个逻辑数据库；
-- 创建领域表；
+- 创建 25 张业务表；
 - 建立索引和唯一约束；
 - 创建安全的演示数据；
 - 不生成 Java 业务代码。
