@@ -306,84 +306,123 @@ Codex 不得假设 Docker Desktop、Maven、npm、ohpm 已经配置正确。
 
 # 10. 规范收口阶段 G0
 
-这是正式写业务代码之前的最后一次规范一致性检查。
+G0 已完成。
 
-G0 不交给 Codex大规模改代码。
+本轮对 00 到 05 做了横向一致性检查，并把发现的问题直接回写到源规范。
 
-由 ChatGPT 审查并处理。
+检查范围：
 
-必须检查：
+1. 服务同步依赖；
+2. 数据库字段与 API；
+3. API 与 PC/HarmonyOS 页面；
+4. AI 表、状态与 LangGraph4j；
+5. RocketMQ Topic、事件和 Consumer Group；
+6. RBAC 权限码；
+7. PREPARE_WORK_ORDER_DRAFT；
+8. 外部业务 ID；
+9. 附件上传；
+10. AI 内部 Context API；
+11. maintenance 与 AI 的异步关联；
+12. Redis Key 命名；
+13. API Result.traceId。
 
-1. 00 到 04 的服务依赖关系；
-2. 01 数据库和 02 API 是否一致；
-3. 02 API 和 03 页面是否一致；
-4. 01 AI 表和 04 AI 状态是否一致；
-5. RocketMQ Topic/事件是否一致；
-6. 权限码是否一致；
-7. PREPARE_WORK_ORDER_DRAFT 名称是否一致；
-8. Long ID 字符串序列化要求是否已进入后端实现计划；
-9. 03 识别的附件上传缺口；
-10. 04 识别的 AI 内部 API 细节。
+G0 结论：
 
-G0 通过后冻结 spec 第一版。
+**PASS。**
 
-之后只有真实实现发现问题时才做受控修订。
+从本次 G0 完成开始，00 到 05 作为第一版冻结基线。真实编码若暴露新的兼容问题，先记录事实，再受控修改对应 spec。
 
 ---
 
-# 11. G0 当前已知待收口项
+# 11. G0 冻结决策
 
-进入 M1 前需要确认以下项目。
+## 11.1 附件
 
-## 11.1 附件上传
+固定：
 
-03-client.md 已明确存在：
+1. 不新增文件微服务；
+2. 物理根目录 E:/IIOP-data/uploads/；
+3. inspection 使用 /api/inspection/attachments/**；
+4. maintenance 使用 /api/maintenance/attachments/**；
+5. JPEG/PNG/WebP；
+6. 单文件 10 MiB；
+7. GET 需要登录；
+8. 数据库只存 URL。
 
-1. 巡检 PHOTO；
-2. 异常 evidence；
-3. 工单附件；
-4. HarmonyOS 图片。
+## 11.2 权限
 
-02-backend.md 尚需补齐：
+01、02、03、04 统一使用固定权限编码。
 
-1. 上传 API；
-2. 本地 E 盘存储目录；
-3. 文件访问 URL；
-4. MIME 类型；
-5. 大小限制；
-6. 文件名处理；
-7. 删除策略；
-8. 权限。
+AI：
 
-第一版不新增文件微服务。
+- ai:view
+- ai:diagnosis
+- ai:confirm
+- ai:chat
 
-## 11.2 AI 权限码
+巡检流程编辑：
 
-01 的 seed 权限需要最终覆盖：
+- inspection:template:manage
 
-1. ai:view；
-2. ai:diagnosis；
-3. ai:confirm；
-4. ai:chat。
+其他权限以 01-database.md 第 14.2 节为准。
 
-## 11.3 Long ID
+## 11.3 外部 ID
 
-后端必须统一把 Long ID 对外序列化为字符串。
+固定：
 
-需要在 common/Jackson 配置阶段落实。
+1. Entity/Service 内部业务 ID 使用 Long；
+2. 外部 PC/HarmonyOS VO 中的业务 ID 使用字符串契约；
+3. 不把所有 Long 全局序列化为字符串；
+4. PageResult.total 等普通数值保持数值；
+5. 前端业务 ID 使用 string。
 
-## 11.4 AI 内部 Context API
+## 11.4 AI Context
 
-04 需要：
+固定：
 
-1. device AI context；
-2. SOP context；
-3. inspection recent history；
-4. maintenance history。
+- GET /internal/device/devices/{id}/ai-context
+- GET /internal/device/devices/{id}/sop-context
+- GET /internal/inspection/devices/{deviceId}/recent-history
+- GET /internal/maintenance/devices/{deviceId}/history
 
-02 必须保持对应内部 API 可实现。
+客户端禁止访问 /internal/**。
 
-这些属于规范一致性修复，不属于新增功能。
+## 11.5 AI 与 Maintenance
+
+固定：
+
+1. maintenance 不同步调用 ai；
+2. AI_DIAGNOSIS_SUCCEEDED 通过 RocketMQ 传 diagnosisId；
+3. maintenance 把 diagnosisId 关联到 mt_defect.ai_diagnosis_id；
+4. 已存在工单时补写 mt_work_order.ai_diagnosis_id；
+5. 从 defect 新建工单时继承 ai_diagnosis_id；
+6. 诊断正文由客户端直接从 iiop-ai 公共 API 获取。
+
+## 11.6 AI 幂等
+
+ai_diagnosis 固定：
+
+UNIQUE(trigger_type, trigger_id)
+
+MANUAL 的 trigger_id 为 NULL，因此 MySQL 仍允许多条人工诊断。
+
+## 11.7 手工诊断补充描述
+
+POST /api/ai/diagnoses 的 description：
+
+持久化到：
+
+ai_diagnosis.user_description
+
+## 11.8 设备当前指标
+
+PC/HarmonyOS 当前指标统一使用：
+
+GET /api/device/devices/{deviceId}/metric-snapshot
+
+趋势仍使用：
+
+GET /api/device/devices/{deviceId}/metric-trend
 
 ---
 
@@ -441,8 +480,12 @@ infra/sql/
 10. 演示数据安全；
 11. 状态值与 spec 完全一致；
 12. ai_diagnosis 使用 diagnosis_status + confirmation_status；
-13. ins_task 使用 overdue_flag；
-14. PREPARE_WORK_ORDER_DRAFT 只出现在 AI 工作流概念中，不是数据库状态。
+13. ai_diagnosis 包含 user_description；
+14. ai_diagnosis 有 UNIQUE(trigger_type, trigger_id)；
+15. mt_defect 包含 ai_diagnosis_id；
+16. ins_task 使用 overdue_flag；
+17. seed 权限码与 01 第 14.2 节一致；
+18. PREPARE_WORK_ORDER_DRAFT 只出现在 AI 工作流概念中，不是数据库状态。
 
 ## 12.6 验证
 
@@ -603,7 +646,7 @@ iiop-common：
 4. BizException；
 5. request ID 常量；
 6. 通用 event envelope；
-7. Jackson Long ID 字符串序列化基础方案。
+7. 外部业务 ID 字符串契约的公共映射/字段级序列化辅助能力。
 
 ## 14.4 禁止
 
@@ -632,7 +675,8 @@ mvn -f backend/pom.xml -pl iiop-common -am test
 2. iiop-common 测试通过；
 3. 没有 Spring 版本漂移；
 4. Maven 依赖实际位于 E 盘；
-5. Long ID 公共序列化策略有测试。
+5. 外部业务 ID 返回字符串且 PageResult.total 等普通数值仍为数字的契约测试通过；
+6. 未启用“所有 Long 全局转字符串”。
 
 ## 14.7 Commit
 
@@ -835,10 +879,11 @@ feat: add realtime notification channel
 7. 状态；
 8. risk；
 9. 指标趋势；
-10. 统计接口；
-11. internal context；
-12. AI context；
-13. SOP context。
+10. metric-snapshot；
+11. 统计接口；
+12. internal context；
+13. AI context；
+14. SOP context。
 
 ## 18.3 Feign
 
@@ -864,10 +909,12 @@ feat: add realtime notification channel
 3. 指标定义；
 4. 指标数据；
 5. ECharts trend 数据；
-6. SOP；
-7. internal context；
-8. 缓存丢失后数据库仍可用；
-9. Three.js 所需字段完整。
+6. metric-snapshot；
+7. SOP；
+8. /internal/device/devices/{id}/ai-context；
+9. /internal/device/devices/{id}/sop-context；
+10. 缓存丢失后数据库仍可用；
+11. Three.js 所需字段完整。
 
 ## 18.6 Commit
 
@@ -898,7 +945,7 @@ iiop-auth 和 iiop-gateway 不承担业务附件上传。
 
 E:/IIOP-data/uploads/
 
-具体 URL 暴露方式、API 路径和访问控制必须先在 G0 补入 02-backend.md，再实现代码。
+URL、API 路径和访问控制已经在 G0 写入 02-backend.md，M8 直接按该契约实现。
 
 ## 19.2 common 可包含
 
@@ -953,7 +1000,7 @@ M9/M10 再分别验收真实业务上传端点和 evidence_urls/attachments URL�
 feat: add local attachment storage foundation
 ~~~
 
-正式执行 M8 前，02-backend.md 必须已经完成附件 API 规范补充。
+02-backend.md 的附件 API 契约已在 G0 固定。
 
 ---
 
@@ -1055,21 +1102,22 @@ feat: implement inspection workflow
 4. mt_work_order_log；
 5. mt_maintenance_record；
 6. mt_acceptance；
-7. 工单附件上传端点。
+7. 工单附件上传端点；
+8. mt_defect.ai_diagnosis_id 和 mt_work_order.ai_diagnosis_id 的关联逻辑。
 
 ## 21.3 MQ Consumer
 
 消费：
 
-iiop.inspection.abnormal
-
-生成 defect。
+1. iiop.inspection.abnormal，生成 defect；
+2. iiop.ai.diagnosis，仅在 AI_DIAGNOSIS_SUCCEEDED 时关联 diagnosisId。
 
 必须：
 
 1. eventId 幂等；
 2. UNIQUE(source_type, source_id) 兜底；
-3. 重复消息不重复创建。
+3. 重复消息不重复创建；
+4. AI 诊断事件只建立引用，不同步调用 iiop-ai。
 
 ## 21.4 工单状态机
 
@@ -1426,7 +1474,8 @@ AI 消费：
 5. 至少一个 @Tool 真实被调用；
 6. Tool 只有读能力；
 7. AI 失败不影响 maintenance；
-8. confirmation 独立于 diagnosis_status。
+8. confirmation 独立于 diagnosis_status；
+9. AI_DIAGNOSIS_SUCCEEDED 能让 maintenance 关联 defect/work-order 的 diagnosisId。
 
 ## 26.6 Commit
 
@@ -2659,18 +2708,19 @@ P1：
 
 # 69. 下一步
 
-05-roadmap.md 完成后，不立即让 Codex 写代码。
+G0 已完成，第一版规范已冻结。
 
-顺序：
+接下来：
 
-1. ChatGPT 做 G0 最终规范一致性修正；
-2. 用户让 Codex 一次 git pull 同步全部 spec；
-3. Codex 执行 M1；
-4. push；
-5. ChatGPT 审查；
-6. 依次推进。
+1. 用户让 Codex 在 E:/IIOP 执行 git status；
+2. 工作区干净时 git pull --ff-only origin main；
+3. 只确认 00 到 05 已同步，不修改代码；
+4. 然后单独执行 M1；
+5. M1 commit + push；
+6. 用户告诉 ChatGPT“M1 已推送，审查”；
+7. ChatGPT 审查通过后再进入 M2-A。
 
-这可以避免 Codex 在规范仍变化时重复读取、重复修改和浪费额度。
+不要让 Codex 在一次任务里同时 pull、实现 M1、继续 M2。
 
 ---
 
