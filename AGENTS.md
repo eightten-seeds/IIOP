@@ -62,7 +62,7 @@
 - 禁止提交真实 API Key、数据库密码、Redis 密码、Token、Same-Token Secret 或其他 Secret。
 - 使用环境变量和可提交的示例配置。
 - 禁止日志输出完整 Token、密码、DeepSeek Key 或敏感请求体。
-- AI 只实现结构化辅助诊断，不扩展聊天、知识库、多智能体或自治 Agent。
+- AI 只实现结构化辅助诊断，不扩展其他 AI 子系统。
 - LangGraph4j 固定 5 节点：LOAD_CONTEXT → ANALYZE_WITH_DEEPSEEK → RISK_CHECK → GENERATE_ADVICE → PREPARE_WORK_ORDER_DRAFT。
 - AI 不得直接控制设备、修改工业参数或绕过人工确认。
 - 测试 Stub 必须与正式实现明确隔离，不得在最终运行路径返回伪造成功结果。
