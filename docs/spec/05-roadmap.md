@@ -293,8 +293,6 @@ Codex 不得假设 Docker Desktop、Maven、npm、ohpm 已经配置正确。
 4. npm install
 5. npm ci
 6. ohpm install
-7. docker pull
-8. docker compose up
 
 如果确认会写 C 盘且无法安全调整：
 
@@ -463,7 +461,6 @@ infra/sql/
 
 不下载 MySQL。
 
-不运行 Docker。
 
 ## 12.5 验收
 
@@ -519,8 +516,7 @@ M2 分为 M2-A 预检和 M2-B 基础设施落地。M2-A 不下载大体积组件
 3. node --version
 4. npm --version
 5. git --version
-6. Docker 是否存在，仅检查
-7. DevEco Studio 后续再检查
+6. DevEco Studio 后续再检查
 
 ## 13.2 Maven
 
@@ -546,19 +542,17 @@ cache=E:/DevCache/npm
 
 ## 13.4 基础设施方案
 
-只在此阶段确定本机实际采用：
+第一版固定采用 Windows 本地服务方式，不使用 Docker。
 
-A. Docker
+M2-A 只检查当前电脑是否已经存在可复用的：
 
-或
+1. MySQL 8.x；
+2. Redis；
+3. Nacos；
+4. RocketMQ；
+5. Sentinel Dashboard。
 
-B. 本地服务
-
-优先依据用户当前电脑已有环境选择，避免为了规范额外安装整套工具。
-
-如果 Docker 已安装但数据目录在 C 盘且修改存在风险：
-
-停止并报告。
+如果未安装，只报告缺失项和建议安装位置，不在 M2-A 自动下载或安装。
 
 ## 13.5 M2-A 验收
 
@@ -568,16 +562,17 @@ B. 本地服务
 2. Maven；
 3. Node；
 4. npm；
-5. Docker；
+5. Git；
 6. E 盘缓存检查；
-7. 采用 Docker 还是本地服务；
-8. 是否允许继续下载和启动基础设施。
+7. 当前已存在的本地基础设施；
+8. 缺失的本地基础设施；
+9. 是否允许继续下载和安装缺失组件。
 
-M2-A 完成后先停止。如果基础设施需要新的大体积下载、Docker 数据目录调整或系统级安装，先由用户确认。
+M2-A 完成后先停止。如果 M2-B 需要新的大体积下载或系统级安装，先由用户确认。
 
 ## 13.6 M2-B 基础设施落地
 
-在 M2-A 已确认方案后准备开发环境需要的：
+固定使用 Windows 本地服务方式准备开发环境需要的：
 
 1. MySQL 8.x；
 2. Redis；
@@ -587,12 +582,13 @@ M2-A 完成后先停止。如果基础设施需要新的大体积下载、Docker
 
 原则：
 
-1. 项目数据和可配置缓存放 E 盘；
+1. 项目数据和可配置缓存尽量放 E 盘；
 2. 不搭生产集群；
 3. 开发环境只需要单机可演示；
 4. Nacos、RocketMQ、Sentinel 的启动配置统一保存在 infra 下的必要文件中；
 5. 不把密码和 Secret 提交 Git；
-6. 如果已有本地服务可复用，优先复用，不重复下载。
+6. 如果已有本地服务可复用，优先复用，不重复下载；
+7. 不安装或配置 Docker。
 
 基础设施启动后：
 
@@ -2417,7 +2413,7 @@ docs/spec/05-roadmap.md
 
 严格实现 M1 数据库 SQL。
 本阶段只生成 infra/sql 中规定的 SQL。
-不要生成 Java，不运行 MySQL，不运行 Docker，不下载依赖。
+不要生成 Java，不运行 MySQL，不下载依赖。
 
 完成静态检查后：
 git diff --check
