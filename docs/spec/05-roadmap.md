@@ -826,33 +826,36 @@ feat: configure API gateway and authentication chain
 
 # 17. M6 WebSocket 通知基础
 
-这一步紧跟 auth/gateway，先把实时通知基础打通，后续告警、工单、AI 都可以复用。
+这一步紧跟 auth/gateway，先把简单实时通知链打通，后续告警、工单、AI 共用。
 
 ## 17.1 实现
 
 iiop-auth：
 
-1. Spring WebSocket；
-2. 原生 WebSocket；
-3. endpoint；
-4. ChannelInterceptor；
-5. Sa-Token 鉴权；
-6. user destination；
-7. SimpMessagingTemplate；
-8. NotificationService。
+1. spring-boot-starter-websocket；
+2. TextWebSocketHandler；
+3. HandshakeInterceptor；
+4. 固定 endpoint：/ws/notifications；
+5. 使用 Sa-Token 校验握手 query 中的 token；
+6. 维护 userId → WebSocketSession 的内存映射；
+7. 发送 JSON 文本通知；
+8. NotificationService 先持久化 sys_notification，再尝试实时推送。
 
 Gateway：
 
-WebSocket route。
+1. 配置 /ws/** → lb:ws://iiop-auth；
+2. 不增加额外实时通信协议。
 
 ## 17.2 验收
 
 1. 登录用户可建立连接；
-2. 未登录连接失败；
+2. 无效 token 握手失败；
 3. 测试通知先落 sys_notification；
-4. 在线用户收到消息；
-5. 离线后 REST 仍能查询；
-6. WebSocket 失败不丢持久化通知。
+4. 在线用户收到 JSON 消息；
+5. 离线用户仍可通过 REST 查询通知；
+6. logout 后连接关闭；
+7. WebSocket 失败不影响通知持久化；
+8. 日志不记录完整 token/query string。
 
 ## 17.3 Commit
 
