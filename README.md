@@ -12,7 +12,7 @@ IIOP 面向工业设备巡检与运维场景，计划建设由微服务后端、
 
 - 后端：JDK 17、Spring Boot 3.5.0、Spring Cloud 2025.0.0、Spring Cloud Alibaba 2025.0.0.0
 - 后端配套：MySQL、MyBatis-Plus、Redis、Nacos、Sentinel、RocketMQ、Sa-Token、WebSocket
-- AI：DeepSeek OpenAI Compatible API、LangChain4j、LangGraph4j
+- AI：DeepSeek、LangChain4j、LangGraph4j（仅结构化设备诊断）
 - PC：Vue 3、Vite、Axios、Pinia、Element Plus、Three.js、ECharts、Vue Flow
 - 移动端：HarmonyOS、ArkTS、ArkUI
 
@@ -24,7 +24,7 @@ IIOP 面向工业设备巡检与运维场景，计划建设由微服务后端、
 - `iiop-device`：工业设备领域
 - `iiop-inspection`：巡检计划、任务与记录
 - `iiop-maintenance`：异常、告警与维修工单
-- `iiop-ai`：智能诊断与 AI 工作流
+- `iiop-ai`：DeepSeek 智能诊断与 5 节点 AI 工作流
 
 ## 目录说明
 
@@ -42,6 +42,8 @@ IIOP 面向工业设备巡检与运维场景，计划建设由微服务后端、
 
 ## 当前开发阶段
 
-工程初始化已经完成，`docs/spec/00-overview.md` 到 `05-roadmap.md` 已完成 G0 最终一致性收口并作为第一版开发基线冻结。
+工程初始化已经完成，`docs/spec/00-overview.md` 到 `05-roadmap.md` 已完成简化版 G0 收口并冻结。
 
-当前尚未实现业务代码。下一阶段按照 `05-roadmap.md` 执行 M1 数据库 SQL，随后逐阶段完成基础设施、后端、AI、PC、HarmonyOS、联调测试和最终答辩材料。
+第一版控制复杂度：5 个逻辑数据库、25 张业务表；AI 只保留 DeepSeek + LangChain4j + LangGraph4j 5 节点诊断；WebSocket 使用原生 JSON 通知；不增加 AI 聊天助手、RAG、向量数据库或额外文件微服务。
+
+当前尚未实现业务代码。下一阶段按照 `05-roadmap.md` 执行 M1 数据库 SQL。
