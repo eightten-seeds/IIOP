@@ -330,6 +330,8 @@ G0 结论：
 
 **PASS。**
 
+随后根据项目单人开发和“不要过度复杂”的要求执行了一次减法收口，删除 AI Assistant、Chat Memory、Tool Calling、STOMP、Actuator 等非核心能力，数据库缩减为 25 张表，AI 工作流缩减为 5 个节点。
+
 从本次 G0 完成开始，00 到 05 作为第一版冻结基线。真实编码若暴露新的兼容问题，先记录事实，再受控修改对应 spec。
 
 ---
@@ -358,7 +360,6 @@ AI：
 - ai:view
 - ai:diagnosis
 - ai:confirm
-- ai:chat
 
 巡检流程编辑：
 
@@ -469,7 +470,7 @@ infra/sql/
 必须满足：
 
 1. 五个逻辑数据库；
-2. 27 张业务表；
+2. 25 张业务表；
 3. 表数量与 spec 一致；
 4. 字段类型正确；
 5. code 唯一；
@@ -596,7 +597,7 @@ M2-A 完成后先停止。如果基础设施需要新的大体积下载、Docker
 基础设施启动后：
 
 1. 执行 M1 SQL；
-2. 确认 5 个逻辑数据库和 27 张表；
+2. 确认 5 个逻辑数据库和 25 张表；
 3. 确认 Redis 可连接；
 4. 确认 Nacos 控制台/服务端可连接；
 5. 确认 RocketMQ NameServer/Broker 可连接；
@@ -833,7 +834,7 @@ feat: configure API gateway and authentication chain
 iiop-auth：
 
 1. Spring WebSocket；
-2. STOMP；
+2. 原生 WebSocket；
 3. endpoint；
 4. ChannelInterceptor；
 5. Sa-Token 鉴权；
@@ -1204,7 +1205,7 @@ sys_notification。
 
 在线：
 
-WebSocket。
+原生 WebSocket。
 
 ## 22.3 Redis
 
@@ -1285,14 +1286,13 @@ feat: add AI model foundation
 
 实现：
 
-1. ai_session；
-2. ai_message；
-3. ai_diagnosis；
-4. ai_workflow_trace；
-5. Mapper；
-6. Query；
-7. diagnosis CRUD/query；
-8. session/message query。
+1. ai_diagnosis；
+2. ai_workflow_trace；
+3. Mapper；
+4. Diagnosis Query；
+5. Diagnosis API；
+6. workflow trace API；
+7. confirm/reject API。
 
 Commit：
 
@@ -1329,7 +1329,7 @@ feat: add AI context clients
 
 1. DiagnosisState；
 2. StateGraph；
-3. 8 Node；
+3. 5 个固定节点；
 4. Graph Factory；
 5. Trace Recorder；
 6. Context Snapshot；
@@ -1419,17 +1419,19 @@ feat: integrate DeepSeek diagnosis
 
 ---
 
-# 26. M15 AI 异步与 Assistant
+# 26. M15 AI 异步、MQ 与人工确认
 
-## 26.1 Worker
+## 26.1 异步执行
 
 实现：
 
-1. PENDING；
-2. RUNNING；
-3. worker claim；
-4. timeout recovery；
-5. succeeded/failed event。
+1. 固定小线程池 diagnosisExecutor；
+2. PENDING → RUNNING；
+3. 手工诊断提交异步任务；
+4. MQ 触发诊断提交异步任务；
+5. SUCCEEDED / FAILED。
+
+不实现数据库轮询 Worker。
 
 ## 26.2 MQ
 
@@ -1438,49 +1440,35 @@ AI 消费：
 1. inspection abnormal；
 2. maintenance alarm。
 
-生产：
+AI 生产：
 
 1. diagnosis succeeded；
 2. diagnosis failed；
 3. diagnosis confirmed。
 
-## 26.3 Assistant
-
-实现：
-
-1. OperationsAssistant；
-2. MessageWindowChatMemory；
-3. DeviceReadTool；
-4. InspectionReadTool；
-5. MaintenanceReadTool；
-6. SopReadTool；
-7. ai_session/message；
-8. chat API。
-
-## 26.4 确认
+## 26.3 确认
 
 实现：
 
 1. confirm；
 2. reject；
-3. ai:confirm 权限。
+3. ai:confirm 权限；
+4. confirmedBy/confirmedAt/comment。
 
-## 26.5 验收
+## 26.4 验收
 
 1. MQ 异常触发诊断；
 2. HTTP 手工触发诊断；
-3. Worker 不重复领取；
-4. Chat Memory 工作；
-5. 至少一个 @Tool 真实被调用；
-6. Tool 只有读能力；
-7. AI 失败不影响 maintenance；
-8. confirmation 独立于 diagnosis_status；
-9. AI_DIAGNOSIS_SUCCEEDED 能让 maintenance 关联 defect/work-order 的 diagnosisId。
+3. 同一异常不重复生成诊断；
+4. 5 节点 LangGraph4j trace 正确；
+5. DeepSeek 失败不影响 maintenance 主业务；
+6. confirmation 独立于 diagnosis_status；
+7. AI_DIAGNOSIS_SUCCEEDED 能让 maintenance 关联 defect/work-order 的 diagnosisId。
 
-## 26.6 Commit
+## 26.5 Commit
 
 ~~~text
-feat: complete AI diagnosis and assistant
+feat: complete AI diagnosis workflow
 ~~~
 
 ---
@@ -1631,19 +1619,18 @@ feat: implement web maintenance pages
 1. diagnosis list；
 2. manual diagnosis；
 3. diagnosis detail；
-4. workflow trace；
+4. 5 节点 workflow trace；
 5. confirm/reject；
-6. AI assistant；
-7. PENDING/RUNNING polling；
-8. AI notification refresh。
+6. PENDING/RUNNING polling；
+7. AI notification refresh。
 
 验收：
 
 1. 真 DeepSeek 结果；
 2. 无 reasoning content；
-3. workflow trace；
-4. AI chat；
-5. Tool 内容来自后端。
+3. 5 节点 workflow trace；
+4. 人工确认；
+5. 工单能显示关联 diagnosisId。
 
 Commit：
 
@@ -1751,7 +1738,7 @@ feat: add inspection flow designer
 
 实现：
 
-1. STOMP client；
+1. 原生 WebSocket；
 2. user queue；
 3. reconnect；
 4. notification store；
@@ -2296,7 +2283,7 @@ M13 LangGraph4j
         ↓
 M14 DeepSeek
         ↓
-M15 AI async + assistant
+M15 AI async + confirm
         ↓
 M16 web base
         ↓
@@ -2476,7 +2463,7 @@ push origin/main
 阅读 AGENTS.md、00、01、02、04、05。
 
 严格实现 M13 LangGraph4j 诊断工作流。
-使用 04-ai.md 固定版本和 8 节点结构。
+使用 04-ai.md 固定版本和 5 节点结构。
 本阶段使用 Stub 模型，不调用真实 DeepSeek。
 完成测试、commit、push 后停止。
 ~~~
@@ -2589,6 +2576,7 @@ ChatGPT 给最小修复 Prompt。
 4. 一个 common 模块承载所有 DTO；
 5. 前端大量 Mock 后最后一天才联调；
 6. AI 最后只补一个 DeepSeek HTTP 接口；
+7. 为了展示 LangChain4j 再增加 AI Assistant、Chat Memory 或 Tool Calling；
 7. 为展示技术强行引入 Kafka/Seata/Elasticsearch/向量库；
 8. 为了“微服务”继续拆十几个服务；
 9. 为了“实时”模拟高频随机设备数据；
@@ -2640,7 +2628,7 @@ P1：
 1. 6 个启动服务；
 2. common；
 3. 5 个逻辑数据库；
-4. 27 张表；
+4. 25 张表；
 5. Nacos；
 6. Gateway；
 7. Redis；
@@ -2665,11 +2653,9 @@ P1：
 
 1. DeepSeek；
 2. LangChain4j；
-3. LangGraph4j；
+3. LangGraph4j 5 节点；
 4. workflow trace；
-5. Tool；
-6. Chat Memory；
-7. 人工确认。
+5. 人工确认。
 
 ## PC
 
@@ -2679,7 +2665,7 @@ P1：
 4. Three.js；
 5. Vue Flow；
 6. AI；
-7. WebSocket。
+7. 原生 WebSocket。
 
 ## HarmonyOS
 
