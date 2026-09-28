@@ -69,7 +69,7 @@
 
 ## 磁盘约束
 
-- 禁止主动向 C 盘写入项目依赖、项目数据库数据、上传文件或 Docker 项目数据。
+- 禁止主动向 C 盘写入项目依赖、项目数据库数据或上传文件。
 - Maven repo：`E:/DevCache/maven/repository`
 - npm cache：`E:/DevCache/npm`
 - npm global 如需要：`E:/DevCache/npm-global`
@@ -85,4 +85,5 @@
 - 重要架构变更只有在明确批准后才同步修改 spec。
 - 原生 WebSocket 只用于 JSON 通知，不叠加额外实时通信协议。
 - 第一版不引入与核心要求无关的额外监控、存储、事务或消息组件。
+- 本地基础设施固定使用 Windows 本地服务，不使用 Docker。
 - 最终正式材料只有团队项目实训报告、个人实训报告、答辩 PPT 和答辩讲稿，其内容必须基于真实最终代码和测试结果。
