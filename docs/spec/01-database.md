@@ -14,7 +14,7 @@
 
 Codex 在 M1 阶段生成 SQL，以及后续生成 Entity、Mapper、Service、DTO 时，必须以本文档为数据库事实来源。不得根据页面方便程度临时增加重复字段，也不得为了减少代码量破坏微服务数据边界。
 
-本文档当前规划 **5 个逻辑数据库、28 张业务表**。
+本文档当前规划 **5 个逻辑数据库、27 张业务表**。
 
 ---
 
@@ -223,7 +223,7 @@ Java 代码后续使用 Enum 与数据库字符串对应。
 
 # 4. iiop_auth 数据库
 
-共 7 张表：
+共 6 张表：
 
 1. sys_user
 2. sys_role
@@ -231,7 +231,6 @@ Java 代码后续使用 Enum 与数据库字符串对应。
 4. sys_user_role
 5. sys_role_permission
 6. sys_notification
-7. sys_operation_log
 
 ---
 
@@ -401,44 +400,6 @@ Java 代码后续使用 Enum 与数据库字符串对应。
 
 ---
 
-## 4.7 sys_operation_log 操作日志表
-
-### 业务目的
-
-记录关键后台操作，支持答辩中的审计和问题追踪。
-
-### 字段
-
-- id BIGINT
-- user_id BIGINT NULL
-- username_snapshot VARCHAR(64) NULL
-- module VARCHAR(64) NOT NULL
-- operation VARCHAR(128) NOT NULL
-- http_method VARCHAR(16) NULL
-- request_uri VARCHAR(255) NULL
-- biz_type VARCHAR(64) NULL
-- biz_id BIGINT NULL
-- request_ip VARCHAR(64) NULL
-- success_flag TINYINT NOT NULL DEFAULT 1
-- result_code VARCHAR(64) NULL
-- duration_ms BIGINT NULL
-- detail VARCHAR(1000) NULL
-- created_at DATETIME NOT NULL
-
-索引：
-
-- INDEX(user_id, created_at)
-- INDEX(module, created_at)
-- INDEX(biz_type, biz_id)
-
-约束：
-
-- 不保存密码；
-- 不保存 Token；
-- 不直接保存完整敏感请求体。
-
----
-
 # 5. iiop_device 数据库
 
 共 5 张表：
@@ -505,8 +466,6 @@ Java 代码后续使用 Enum 与数据库字符串对应。
 | position_x | DECIMAL(12,3) | 是 | 三维 X 坐标 |
 | position_y | DECIMAL(12,3) | 是 | 三维 Y 坐标 |
 | position_z | DECIMAL(12,3) | 是 | 三维 Z 坐标 |
-| last_inspection_time | DATETIME | 是 | 最近巡检时间 |
-| next_inspection_time | DATETIME | 是 | 下次计划巡检时间 |
 | remark | VARCHAR(1000) | 是 | 备注 |
 | created_at | DATETIME | 否 | 创建时间 |
 | updated_at | DATETIME | 否 | 更新时间 |
@@ -541,6 +500,8 @@ Java 代码后续使用 Enum 与数据库字符串对应。
 
 业务规则：
 
+- 最近巡检时间和下次巡检时间属于 inspection 领域，不在 dev_device 冗余保存，避免 inspection 反向修改 device 数据库；
+- PC 设备详情需要巡检摘要时通过 inspection API 聚合；
 - SCRAPPED 设备不能继续生成新的巡检任务；
 - FAULT 或 MAINTENANCE 可以继续查询历史；
 - model_url 和 position_x/y/z 直接服务于 Three.js 场景。
@@ -816,6 +777,7 @@ NUMBER 类型允许设置上下限。
 - template_id BIGINT
 - assignee_user_id BIGINT
 - task_status VARCHAR(32)
+- overdue_flag TINYINT NOT NULL DEFAULT 0
 - result_status VARCHAR(32)
 - scheduled_start_time DATETIME
 - scheduled_end_time DATETIME NULL
@@ -1078,6 +1040,7 @@ NUMBER 类型允许设置上下限。
 约束：
 
 - UNIQUE(defect_code)
+- UNIQUE(source_type, source_id)
 - INDEX(device_id, status)
 - INDEX(severity, status)
 - INDEX(source_type, source_id)
@@ -1425,7 +1388,7 @@ WAITING_ACCEPTANCE → PROCESSING
 5. ANALYZE_WITH_DEEPSEEK
 6. RISK_CHECK
 7. GENERATE_ADVICE
-8. CREATE_WORK_ORDER_DRAFT
+8. PREPARE_WORK_ORDER_DRAFT
 
 索引：
 
@@ -1480,10 +1443,7 @@ PENDING → IN_PROGRESS → COMPLETED
 
 - PENDING → CANCELLED
 - IN_PROGRESS → CANCELLED
-- PENDING → OVERDUE
-- IN_PROGRESS → OVERDUE
-
-是否允许 OVERDUE 后继续执行，由后端业务规则决定；第一版建议允许继续进入 IN_PROGRESS，便于演示逾期补巡检。
+逾期不作为任务生命周期状态。达到计划截止时间仍未完成时，将 \`overdue_flag\` 标记为 1；任务仍保持 PENDING 或 IN_PROGRESS。这样既保留真实生命周期状态，也能独立统计逾期任务。
 
 ## 10.2 巡检异常
 
@@ -1554,14 +1514,6 @@ PENDING → REJECTED
 ai_diagnosis.context_snapshot 保存诊断当时使用的关键上下文。
 
 后续设备资料变化时，仍可以解释当时 AI 为什么给出该结果。
-
-### 11.4 用户名称快照
-
-sys_operation_log 保存 username_snapshot。
-
-即使用户资料变化，操作日志仍可阅读。
-
----
 
 # 12. Three.js、ECharts、Vue Flow 对数据库的反向要求
 
@@ -1653,7 +1605,7 @@ AI 服务不得跨库直接 JOIN 上述表。
 
 # 14. 初始化演示数据
 
-M1 的 `06_seed_data.sql` 只生成演示数据，不生成真实账号密码。
+M1 的 `06_seed_data.sql` 只生成演示数据，不生成真实账号密码。演示数据使用固定的小范围 BIGINT ID（例如 1001 起），后续 MyBatis-Plus ASSIGN_ID 生成的分布式 ID 与这些演示 ID 不会发生实际冲突。
 
 ## 14.1 角色
 
@@ -1778,7 +1730,7 @@ infra/sql/
 
 USE iiop_auth;
 
-创建 auth 的 7 张表。
+创建 auth 的 6 张表。
 
 ### 02_device_schema.sql
 
@@ -1835,7 +1787,7 @@ Codex 完成 M1 后，必须静态检查以下内容。
 ### 17.1 数量
 
 - 5 个逻辑数据库；
-- 28 张业务表；
+- 27 张业务表；
 - 不多建临时业务表；
 - 不漏表。
 
@@ -1878,8 +1830,7 @@ Codex 完成 M1 后，必须静态检查以下内容。
 - 工单闭环；
 - AI 诊断；
 - AI 工作流轨迹；
-- WebSocket 历史通知；
-- 操作审计。
+- WebSocket 历史通知。
 
 ---
 
@@ -1924,13 +1875,13 @@ M2 以后生成 Java 实体时：
 
 M1 阶段数据库范围已经固定为：
 
-- iiop_auth：7 表；
+- iiop_auth：6 表；
 - iiop_device：5 表；
 - iiop_inspection：6 表；
 - iiop_maintenance：6 表；
 - iiop_ai：4 表；
 
-合计 **28 张业务表**。
+合计 **27 张业务表**。
 
 这个模型足以支撑：
 
