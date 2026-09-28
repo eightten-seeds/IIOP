@@ -27,6 +27,20 @@ Codex 不重新设计架构，只负责按规范实现。
 
 ---
 
+## 1.1 全程最小实现原则
+
+后续 S2-S8 全部以“能真实运行、能完成业务闭环、能体现指定技术栈”为上限，不追求生产级复杂度。
+
+固定规则：
+
+- 可选增强项默认不做；
+- 不增加新的微服务或中间件；
+- 不做高可用、集群、灰度、复杂容灾、复杂缓存、复杂熔断或分布式事务；
+- 一项技术只完成一个可真实演示的最小闭环；
+- 阶段验收优先检查主链是否真实可用，不为边缘场景增加大量代码；
+- 审查发现不影响课程要求和业务主线的复杂实现时，允许删减；
+- Codex 不得自行把“建议”“可选”实现成必做功能。
+
 ## 2. 已完成基线
 
 以下工作已经完成，不再重复：
@@ -333,9 +347,9 @@ Gateway：
 - RocketMQ Topic / Consumer Group；
 - inspection abnormal -> maintenance defect；
 - alarm / work order / AI 通知；
-- MQ 幂等；
-- Redis 设备快照和必要统计缓存；
-- Sentinel 基础规则。
+- MQ 使用一个简单的 eventId 幂等方案；
+- Redis 只复用已有会话/幂等能力，设备和 Dashboard 缓存按真实需要再加；
+- Sentinel 只完成一个可演示的 Gateway 限流规则。
 
 验收：
 
@@ -344,7 +358,6 @@ Gateway：
 - MQ 事件可实际消费；
 - 在线 WebSocket 能收通知；
 - 离线 REST 仍能查通知；
-- Redis 丢缓存后数据库仍能工作；
 - 6 个后端启动服务全部可注册。
 
 建议提交：
@@ -390,10 +403,10 @@ LOAD_CONTEXT
 - DeepSeek 真调用；
 - 结构化 JSON 校验；
 - RiskGuard；
-- 诊断异步 TaskExecutor；
+- 一个小型 TaskExecutor；
 - MQ 触发和结果事件；
 - confirm / reject；
-- maintenance 异步关联 diagnosisId。
+- maintenance 只关联 diagnosisId，不增加额外 AI 查询链。
 
 公共 API 仅：
 
@@ -650,35 +663,29 @@ Alarm/WorkOrder/AI -> MQ -> Notification -> WebSocket -> PC
 - Same-Token；
 - WebSocket 鉴权。
 
-## 9.2 S6-B 故障 + 基础体验
+## 9.2 S6-B 最小故障与体验检查
 
-至少模拟：
+只验证对答辩有直接价值的三个失败场景：
 
-- Redis 暂不可用；
-- Nacos 服务发现问题；
-- MQ 重复消费；
-- DeepSeek timeout / 429 / 5xx；
-- AI JSON invalid；
-- Context API timeout；
-- WebSocket 断开；
-- glTF 加载失败。
+1. DeepSeek 不可用或返回非法 JSON时，AI 明确 FAILED，基础业务不受影响；
+2. WebSocket 断开后可以重连，历史通知仍可通过 REST 查询；
+3. 同一 MQ eventId 重复到达时，不重复生成核心业务记录。
 
-并做真实基础体验检查：
+再做一次基本人工体验检查：
 
-- CRUD；
-- Dashboard 请求数量；
-- metric trend；
-- 页面资源；
-- DeepSeek 延迟；
-- WebSocket；
-- HarmonyOS 列表和表单。
+- 核心 CRUD 可用；
+- Dashboard/Three.js/Vue Flow 能正常展示；
+- HarmonyOS 核心表单可提交；
+- 页面没有明显阻塞错误。
 
-不伪造压测成绩。
+不做生产级混沌测试、容量压测、Nacos/Redis 集群故障演练或大量边缘场景矩阵。
+
+不伪造性能数字。
 
 建议提交：
 
 ~~~text
-test: verify end-to-end and failure scenarios
+test: verify core end-to-end scenarios
 ~~~
 
 ---
