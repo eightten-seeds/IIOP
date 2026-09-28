@@ -253,8 +253,6 @@ AI 依赖版本不在本文档中提前固定，由 `04-ai.md` 单独确定。
 - `sa-token-reactor-spring-boot3-starter`
 - `sa-token-redis-template`
 - `spring-boot-starter-data-redis`
-- `commons-pool2`
-- `spring-boot-starter-actuator`
 - `iiop-common`
 
 禁止：
@@ -281,9 +279,7 @@ AI 依赖版本不在本文档中提前固定，由 `04-ai.md` 单独确定。
 - Nacos Config
 - `sa-token-spring-boot3-starter`
 - `sa-token-redis-template`
-- `commons-pool2`
 - Spring Cloud Stream RocketMQ binder
-- Actuator
 - `iiop-common`
 
 auth 第一版不需要 OpenFeign。RocketMQ 仅用于消费告警、工单和 AI 诊断事件并生成持久化通知。
@@ -304,7 +300,6 @@ auth 第一版不需要 OpenFeign。RocketMQ 仅用于消费告警、工单和 A
 - Spring Cloud LoadBalancer
 - Sa-Token Boot3
 - Sa-Token Redis
-- Actuator
 - iiop-common
 
 device 不引入 RocketMQ，除非后续真实业务需要设备状态事件。
@@ -322,7 +317,6 @@ device 不引入 RocketMQ，除非后续真实业务需要设备状态事件。
 - LoadBalancer
 - Sa-Token Boot3 + Redis
 - Spring Cloud Stream RocketMQ binder
-- Actuator
 - iiop-common
 
 inspection 是 `iiop.inspection.abnormal` 的生产者。
@@ -340,7 +334,6 @@ inspection 是 `iiop.inspection.abnormal` 的生产者。
 - LoadBalancer
 - Sa-Token Boot3 + Redis
 - Spring Cloud Stream RocketMQ binder
-- Actuator
 - iiop-common
 
 maintenance 同时是异常事件消费者、维护事件生产者。
@@ -358,10 +351,9 @@ maintenance 同时是异常事件消费者、维护事件生产者。
 - LoadBalancer
 - Sa-Token Boot3 + Redis
 - Spring Cloud Stream RocketMQ binder
-- Actuator
 - iiop-common
 
-LangChain4j、LangGraph4j、DeepSeek 具体依赖由 `04-ai.md` 定义。
+LangChain4j、LangGraph4j、DeepSeek 只用于结构化设备诊断，具体依赖由 `04-ai.md` 定义。
 
 ---
 
@@ -651,8 +643,7 @@ M2 真正实现时若 namespace 的实际 ID 与名称不同，以 Nacos 控制�
 只放跨服务共享配置：
 
 - Redis 地址；
-- Sa-Token 通用参数；
-- Actuator 暴露范围；
+- Sa-Token 通用参数； 暴露范围；
 - 基础日志级别；
 - 通用超时。
 
@@ -746,9 +737,7 @@ Nacos 配置使用环境变量占位符。
 - POST /api/auth/login
 - OPTIONS /**
 - WebSocket 初始握手路径
-- Gateway 自身健康检查
 
-是否公开服务健康检查由开发环境决定，不通过 Gateway 暴露所有下游 Actuator。
 
 ## 11.4 CORS
 
@@ -894,7 +883,6 @@ Controller/Service 的用户业务入口使用：
 - ai:view
 - ai:diagnosis
 - ai:confirm
-- ai:chat
 
 ### 系统管理
 
@@ -1344,70 +1332,109 @@ Gateway：
 
 ## 17.1 所属服务
 
-WebSocket 明确放在：
+WebSocket 放在 iiop-auth。
 
-`iiop-auth`
+原因：
 
-理由：
-
-- `sys_notification` 属于 iiop_auth；
-- auth 已维护用户登录态；
+- sys_notification 属于 iiop_auth；
+- auth 已经维护用户登录态；
 - 不新增 notification 微服务；
-- 课程项目单实例/少实例足以使用 Spring 内置 STOMP broker。
+- 第一版只需要简单用户通知推送。
 
 ## 17.2 技术方案
 
-使用：
+使用 Spring 原生 WebSocket：
 
-- Spring WebSocket；
-- STOMP；
-- Spring Simple Broker；
-- `SimpMessagingTemplate`。
+- `spring-boot-starter-websocket`
+- `TextWebSocketHandler`
+- `HandshakeInterceptor`
+- JSON 文本消息
 
-第一版不再额外部署 RabbitMQ 作为 STOMP broker。
+第一版不使用：
 
-RocketMQ 仍承担服务间业务事件；WebSocket 只承担服务到客户端的实时推送。两者职责不同。
+- 原生 WebSocket；
+- SockJS；
+- RabbitMQ Broker；
+- 额外 WebSocket 框架。
 
 ## 17.3 Gateway 路由
 
-WebSocket：
+~~~text
+/ws/** → lb:ws://iiop-auth
+~~~
 
-`/ws/** → lb:ws://iiop-auth`
+固定握手路径：
 
-如果后续启用 SockJS fallback，需要同时配置对应 HTTP route。
+~~~text
+/ws/notifications
+~~~
 
-第一版 PC 优先使用原生 WebSocket + STOMP，不强制 SockJS。
+## 17.4 鉴权
 
-## 17.4 STOMP 目的地
+浏览器原生 WebSocket 无法设置任意自定义 Header。
 
-建议：
+第一版连接方式：
 
-- 客户端 CONNECT endpoint：`/ws/notifications`
-- 用户订阅：`/user/queue/notifications`
-- 可选公共系统消息：`/topic/system`
+~~~text
+ws://gateway/ws/notifications?token=<sa-token-value>
+~~~
 
-用户告警、工单、AI 通知优先走 user queue，避免广播敏感业务信息。
+HandshakeInterceptor：
 
-## 17.5 WebSocket 鉴权
+1. 读取 token；
+2. 使用 Sa-Token 校验；
+3. 获取 userId；
+4. 把 userId 写入 WebSocketSession attributes；
+5. 校验失败则拒绝握手。
 
-STOMP CONNECT 时携带 Sa-Token token。
+约束：
 
-auth 服务通过 `ChannelInterceptor` 校验 Token 并绑定 userId。
+- token 只用于握手；
+- 服务日志禁止记录完整 WebSocket QueryString；
+- 页面退出登录后立即关闭连接；
+- 后续如果使用 Cookie 模式再受控调整，不在第一版增加复杂认证协议。
 
-禁止仅依赖浏览器页面“已经登录”这一前提。
+## 17.5 连接管理
 
-## 17.6 推送流程
+auth 维护内存中的：
 
-```text
-MQ/业务事件
-→ auth 生成 sys_notification
-→ 数据库提交成功
-→ 在线则 SimpMessagingTemplate 推送
-→ 离线则只保留数据库记录
-→ 用户下次登录通过 REST 查询
-```
+~~~text
+userId → WebSocketSession
+~~~
 
-因此 WebSocket 失败不会造成通知事实丢失。
+第一版按单实例 auth 运行即可。
+
+连接关闭时清理 Session。
+
+不引入 Redis Pub/Sub 做 WebSocket 跨实例广播。
+
+## 17.6 消息格式
+
+统一 JSON：
+
+~~~json
+{
+  "type": "WORK_ORDER",
+  "title": "新的维修工单",
+  "content": "WO2026... 已分配给你",
+  "bizType": "WORK_ORDER",
+  "bizId": "1001",
+  "createdAt": "2026-09-28T18:00:00"
+}
+~~~
+
+## 17.7 推送流程
+
+~~~text
+业务/RocketMQ事件
+→ auth 创建 sys_notification
+→ 数据库提交
+→ 如果用户在线，发送 WebSocket JSON
+→ 如果用户离线，只保留数据库记录
+→ 客户端下次登录通过 REST 查询
+~~~
+
+WebSocket 只负责实时提醒，sys_notification 才是通知事实。
 
 ---
 
@@ -2083,43 +2110,52 @@ INSPECTOR 默认只能执行分配给自己的任务，管理员可查看全部�
 
 # 26. iiop-ai API
 
-AI 业务细节以 `04-ai.md` 为准。
+AI 只提供诊断能力，具体行为以 04-ai.md 为准。
 
-`POST /api/ai/diagnoses` 的 MANUAL 请求至少包含：
+### POST /api/ai/diagnoses
+
+权限：ai:diagnosis
+
+MANUAL 请求至少包含：
 
 - deviceId
 - abnormalSummary
 - description，可选，对应 ai_diagnosis.user_description
 
-后端路由先固定：
+### GET /api/ai/diagnoses
 
-- POST /api/ai/chat
-- GET /api/ai/sessions
-- GET /api/ai/sessions/{id}/messages
-- POST /api/ai/diagnoses
-- GET /api/ai/diagnoses
-- GET /api/ai/diagnoses/{id}
-- GET /api/ai/diagnoses/{id}/workflow
-- POST /api/ai/diagnoses/{id}/confirm
-- POST /api/ai/diagnoses/{id}/reject
+权限：ai:view
 
-确认和拒绝必须记录：
+支持：
 
-- confirmedBy；
-- confirmedAt；
-- comment。
+- deviceId
+- triggerType
+- riskLevel
+- diagnosisStatus
+- confirmationStatus
+- pageNum
+- pageSize
 
-AI API 不提供执行停机、修改设备参数等物理控制端点。
+### GET /api/ai/diagnoses/{id}
 
----
+权限：ai:view
 
-# 27. Dashboard 数据聚合
+### GET /api/ai/diagnoses/{id}/workflow
 
-不新增 dashboard 微服务。
+权限：ai:view
 
-PC 首页分别调用：
+### POST /api/ai/diagnoses/{id}/confirm
 
-- device statistics；
+权限：ai:confirm
+
+### POST /api/ai/diagnoses/{id}/reject
+
+权限：ai:confirm
+
+AI 服务不提供：
+
+- /api/ai/chat
+- session/message API
 - inspection statistics；
 - maintenance statistics。
 
@@ -2160,28 +2196,9 @@ Redis 对各服务统计结果做短缓存。
 
 ---
 
-# 29. Actuator
+# 29. 测试策略
 
-所有启动服务引入 Actuator。
-
-至少使用：
-
-- health；
-- info。
-
-开发阶段不公开：
-
-- env；
-- beans；
-- configprops 等可能泄露配置的端点。
-
-业务服务的 Actuator 不经 Gateway 对公网路由。
-
----
-
-# 30. 测试策略
-
-## 30.1 单元测试
+## 29.1 单元测试
 
 重点测试：
 
@@ -2189,10 +2206,10 @@ Redis 对各服务统计结果做短缓存。
 - 业务编码生成；
 - 权限判断；
 - DTO 校验；
-- AI 结构解析；
+- AI 结构化结果解析；
 - MQ 幂等逻辑。
 
-## 30.2 Service 测试
+## 29.2 Service 测试
 
 重点：
 
@@ -2203,7 +2220,7 @@ Redis 对各服务统计结果做短缓存。
 - 验收驳回；
 - AI 人工确认。
 
-## 30.3 Controller/API 测试
+## 29.3 Controller/API 测试
 
 至少验证：
 
@@ -2214,7 +2231,7 @@ Redis 对各服务统计结果做短缓存。
 - 对象不存在；
 - 状态冲突。
 
-## 30.4 集成测试
+## 29.4 集成测试
 
 后期真实基础设施启动后验证：
 
@@ -2231,7 +2248,7 @@ Redis 对各服务统计结果做短缓存。
 
 ---
 
-# 31. 分阶段后端实施顺序
+# 30. 分阶段后端实施顺序
 
 后端实际编码不得一次生成全部服务。
 
@@ -2257,7 +2274,7 @@ Redis 对各服务统计结果做短缓存。
 - Sa-Token；
 - Bootstrap Admin；
 - 通知 REST；
-- WebSocket。
+- 原生 WebSocket。
 
 ## B3：gateway
 
@@ -2305,7 +2322,7 @@ Redis 对各服务统计结果做短缓存。
 
 ---
 
-# 32. 每阶段构建规则
+# 31. 每阶段构建规则
 
 第一次真正允许 Maven 下载依赖前，Codex 必须先确认：
 
@@ -2339,7 +2356,7 @@ Redis 对各服务统计结果做短缓存。
 
 ---
 
-# 33. 代码质量规则
+# 32. 代码质量规则
 
 后端必须遵守：
 
@@ -2362,7 +2379,7 @@ Redis 对各服务统计结果做短缓存。
 
 ---
 
-# 34. 后端验收链路
+# 33. 后端验收链路
 
 项目最终至少必须演示以下链路。
 
@@ -2419,8 +2436,8 @@ Gateway
 ```text
 异常/告警事件
 → AI Consumer
+→ LangGraph4j 5 节点
 → OpenFeign 获取上下文
-→ LangGraph4j
 → LangChain4j
 → DeepSeek
 → ai_diagnosis
@@ -2441,7 +2458,7 @@ Gateway
 
 ---
 
-# 35. M2 开始前的约束
+# 34. M2 开始前的约束
 
 在数据库 M1 完成并审查通过前，不进入大规模后端业务生成。
 
@@ -2469,7 +2486,7 @@ Codex 如果发现：
 
 ---
 
-# 36. 官方实现依据
+# 35. 官方实现依据
 
 本文档中的版本和关键集成方式基于以下官方资料核对：
 
@@ -2481,11 +2498,11 @@ Codex 如果发现：
 6. Spring Cloud Alibaba RocketMQ 2025.x 文档，确认 `spring-cloud-starter-stream-rocketmq`；
 7. Sa-Token 1.46 官方文档，确认 Spring Boot 3 MVC/Reactor starter、Redis 分布式会话和 Same-Token 微服务方案；
 8. MyBatis-Plus 官方文档，确认 Spring Boot 3 starter 与 3.5.17；
-9. Spring Framework WebSocket/STOMP 文档，确认 STOMP endpoint、user destination 和 Simple Broker 能力。
+9. Spring Framework WebSocket 文档，确认原生 WebSocket Handler 与握手拦截能力。
 
 ---
 
-# 37. 当前结论
+# 36. 当前结论
 
 后端第一版架构固定为：
 
@@ -2513,7 +2530,7 @@ OpenFeign + Same-Token
 RocketMQ
 
 实时客户端通知：
-iiop-auth + STOMP/WebSocket
+iiop-auth + 原生 WebSocket
 
 AI：
 iiop-ai + LangChain4j + LangGraph4j + DeepSeek
