@@ -1023,6 +1023,7 @@ NUMBER 类型允许设置上下限。
 - reported_by BIGINT NULL
 - reported_at DATETIME
 - status VARCHAR(32)
+- ai_diagnosis_id BIGINT NULL
 - resolved_at DATETIME NULL
 - created_at DATETIME
 - updated_at DATETIME
