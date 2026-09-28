@@ -1350,12 +1350,7 @@ WebSocket 放在 iiop-auth。
 - `HandshakeInterceptor`
 - JSON 文本消息
 
-第一版不使用：
-
-- 原生 WebSocket；
-- SockJS；
-- RabbitMQ Broker；
-- 额外 WebSocket 框架。
+第一版只使用上述原生 WebSocket 能力，不再叠加额外消息协议或外部 WebSocket Broker。
 
 ## 17.3 Gateway 路由
 
@@ -1939,7 +1934,7 @@ AI 使用两个明确的只读内部契约：
 
 只返回与该设备相关且状态为 EFFECTIVE 的 SOP 摘要/受控内容，优先设备专属，再按设备分类匹配。
 
-这样 LangGraph4j 的 LOAD_DEVICE 与 LOAD_SOP 节点具有独立、可审计的数据来源。
+这两个接口由 LangGraph4j 的 LOAD_CONTEXT 节点统一调用，数据来源保持清晰可审计。
 
 禁止让 AI 服务直接查 iiop_device。
 
@@ -2152,14 +2147,21 @@ MANUAL 请求至少包含：
 
 权限：ai:confirm
 
-AI 服务不提供：
+AI 服务只提供上述诊断 API。
 
-- /api/ai/chat
-- session/message API
+---
+
+# 27. Dashboard 数据聚合
+
+不新增 dashboard 微服务。
+
+PC 首页分别调用：
+
+- device statistics；
 - inspection statistics；
 - maintenance statistics。
 
-前端可以并行请求后组合展示。
+前端并行请求后组合展示。
 
 原因：
 
@@ -2383,7 +2385,7 @@ Redis 对各服务统计结果做短缓存。
 
 项目最终至少必须演示以下链路。
 
-## 34.1 登录链
+## 33.1 登录链
 
 ```text
 POST /api/auth/login
@@ -2396,7 +2398,7 @@ POST /api/auth/login
 → 返回 Token
 ```
 
-## 34.2 设备链
+## 33.2 设备链
 
 ```text
 Gateway
@@ -2407,7 +2409,7 @@ Gateway
 → PC 设备页面
 ```
 
-## 34.3 巡检链
+## 33.3 巡检链
 
 ```text
 计划
@@ -2418,7 +2420,7 @@ Gateway
 → RocketMQ
 ```
 
-## 34.4 维护链
+## 33.4 维护链
 
 ```text
 异常事件
@@ -2431,7 +2433,7 @@ Gateway
 → Completed
 ```
 
-## 34.5 AI 链
+## 33.5 AI 链
 
 ```text
 异常/告警事件
@@ -2444,7 +2446,7 @@ Gateway
 → 人工确认
 ```
 
-## 34.6 通知链
+## 33.6 通知链
 
 ```text
 业务/MQ事件
