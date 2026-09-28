@@ -1336,14 +1336,13 @@ Codex 不负责：
 - M0 工程初始化；
 - G0 简化版规范收口；
 - M1 数据库 SQL 文件；
-- M2-A 开发环境与路径准备。
+- M2-A 开发环境与路径准备；
+- S1 本地基础设施落地与实机验收。
 
-实施路线已压缩为 S1-S8，具体顺序和阶段门禁以 `05-roadmap.md` 为准。
+S1 已确认 MySQL、25 张业务表、Redis、Nacos、RocketMQ、Sentinel 可用于后续开发。
 
-当前执行 **S1 基础设施**：
+实施路线以 `05-roadmap.md` 的 S1-S8 压缩路线为准。
 
-- 实际导入 M1 SQL 并验证 5 个逻辑数据库、25 张业务表；
-- 完成 MySQL、Redis、Nacos、RocketMQ、Sentinel 本地开发环境；
-- S1 通过后直接进入 S2-A：common + auth + gateway。
+当前进入 **S2-A：common + auth + gateway**。
 
-阶段合并只减少执行轮次，不改变本文档定义的架构边界。
+本阶段开始正式后端编码，仍严格遵守本文档定义的微服务边界、数据库边界和安全约束。
