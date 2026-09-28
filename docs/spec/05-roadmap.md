@@ -468,7 +468,7 @@ M1 通过后开始。
 
 这一阶段优先确认工具与路径，不写大规模业务。
 
-## 13.1 检查
+## 13.1 M2-A 工具与路径预检
 
 1. java -version
 2. mvn -version
@@ -516,7 +516,7 @@ B. 本地服务
 
 停止并报告。
 
-## 13.5 验收
+## 13.5 M2-A 验收
 
 输出：
 
@@ -526,9 +526,48 @@ B. 本地服务
 4. npm；
 5. Docker；
 6. E 盘缓存检查；
-7. 下一阶段是否允许下载 Maven 依赖。
+7. 采用 Docker 还是本地服务；
+8. 是否允许继续下载和启动基础设施。
 
-此阶段可以不 commit，除非确实修改了 .npmrc 或基础设施配置。
+M2-A 完成后先停止。如果基础设施需要新的大体积下载、Docker 数据目录调整或系统级安装，先由用户确认。
+
+## 13.6 M2-B 基础设施落地
+
+在 M2-A 已确认方案后准备开发环境需要的：
+
+1. MySQL 8.x；
+2. Redis；
+3. Nacos 3.0.3；
+4. RocketMQ 5.3.1；
+5. Sentinel Dashboard 1.8.9。
+
+原则：
+
+1. 项目数据和可配置缓存放 E 盘；
+2. 不搭生产集群；
+3. 开发环境只需要单机可演示；
+4. Nacos、RocketMQ、Sentinel 的启动配置统一保存在 infra 下的必要文件中；
+5. 不把密码和 Secret 提交 Git；
+6. 如果已有本地服务可复用，优先复用，不重复下载。
+
+基础设施启动后：
+
+1. 执行 M1 SQL；
+2. 确认 5 个逻辑数据库和 27 张表；
+3. 确认 Redis 可连接；
+4. 确认 Nacos 控制台/服务端可连接；
+5. 确认 RocketMQ NameServer/Broker 可连接；
+6. 确认 Sentinel Dashboard 可访问。
+
+只有 M2-B 通过，后续服务的“可启动验收”才有完整环境。
+
+M2 如果新增 infra 配置文件，使用：
+
+~~~text
+chore: configure local development infrastructure
+~~~
+
+提交并 push。
 
 ---
 
@@ -840,9 +879,9 @@ feat: implement device service
 
 ---
 
-# 19. M8 附件上传能力
+# 19. M8 附件存储基础
 
-在巡检 PHOTO 和 HarmonyOS 开发前必须完成。
+在巡检 PHOTO 和 HarmonyOS 开发前必须完成通用存储基础。具体业务上传端点分别在 M9 inspection 和 M10 maintenance 中落地。
 
 ## 19.1 约束
 
@@ -892,14 +931,19 @@ URL 统一通过 Gateway 暴露或由业务服务返回稳定访问地址。
 6. 不信任原始扩展名；
 7. 不上传到 C 盘。
 
-## 19.4 验收
+## 19.4 M8 验收
 
-1. inspection 图片可上传；
-2. 返回 URL；
-3. URL 可读取；
-4. evidence_urls 只存 URL；
-5. 非法文件拒绝；
-6. 大文件拒绝。
+本阶段只验收通用存储基础：
+
+1. 文件写入 E:/IIOP-data/uploads；
+2. 生成安全的新文件名；
+3. 路径穿越被拒绝；
+4. MIME/扩展名校验逻辑有测试；
+5. 大小限制逻辑有测试；
+6. 无业务数据库依赖；
+7. 无独立文件微服务。
+
+M9/M10 再分别验收真实业务上传端点和 evidence_urls/attachments URL。
 
 ## 19.5 Commit
 
@@ -936,8 +980,9 @@ feat: add local attachment storage
 13. cancel；
 14. overdue_flag；
 15. abnormal；
-16. 统计；
-17. recent history internal API。
+16. 巡检 PHOTO/异常 evidence 上传端点；
+17. 统计；
+18. recent history internal API。
 
 ## 20.3 Feign
 
@@ -1009,7 +1054,8 @@ feat: implement inspection workflow
 3. mt_work_order；
 4. mt_work_order_log；
 5. mt_maintenance_record；
-6. mt_acceptance。
+6. mt_acceptance；
+7. 工单附件上传端点。
 
 ## 21.3 MQ Consumer
 
@@ -2173,7 +2219,9 @@ G0 规范收口
         ↓
 M1 SQL
         ↓
-M2 环境预检
+M2-A 环境预检
+        ↓
+M2-B 基础设施
         ↓
 M3 common
         ↓
