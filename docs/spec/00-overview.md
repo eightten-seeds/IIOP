@@ -114,7 +114,7 @@ IIOP 最终必须形成以下完整链路：
 - Vue、Vite、Element Plus 等前端依赖的具体小版本；
 - HarmonyOS API Level 和 DevEco Studio 具体版本；
 - DeepSeek 最终使用 deepseek-flash 或经确认的兼容模型；
-- 本地基础设施采用原生安装还是 Docker，以本机现有环境和 E 盘约束为准。
+- 本地基础设施固定采用 Windows 本地服务方式，不使用 Docker。
 
 第一版不增加与当前技术架构无关的额外中间件或 AI 组件。Codex 不得为了“完整”自行扩展技术栈。
 
@@ -1252,7 +1252,6 @@ npm cache：
 
 - 不主动向 C 盘下载项目依赖；
 - 不主动向 C 盘写入项目数据库数据；
-- 不主动向 C 盘写入 Docker 数据；
 - 执行下载命令前先明确下载位置；
 - 不确定时停止执行并报告。
 
