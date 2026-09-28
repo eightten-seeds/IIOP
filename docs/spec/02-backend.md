@@ -282,10 +282,11 @@ AI 依赖版本不在本文档中提前固定，由 `04-ai.md` 单独确定。
 - `sa-token-spring-boot3-starter`
 - `sa-token-redis-template`
 - `commons-pool2`
+- Spring Cloud Stream RocketMQ binder
 - Actuator
 - `iiop-common`
 
-auth 第一版不需要 OpenFeign。
+auth 第一版不需要 OpenFeign。RocketMQ 仅用于消费告警、工单和 AI 诊断事件并生成持久化通知。
 
 ## 5.4 iiop-device
 
@@ -466,7 +467,7 @@ com.iiop.device
 | 范围 | 含义 |
 |---|---|
 | 0 | 成功 |
-| 40000-40999 | 参数和业务请求错误 |
+| 40000-40099 | 参数格式、校验和一般请求错误 |
 | 40100-40199 | 未登录/Token 问题 |
 | 40300-40399 | 权限问题 |
 | 40400-40499 | 业务对象不存在 |
@@ -637,8 +638,8 @@ spring:
 
   config:
     import:
-      - nacos:iiop-shared.yaml?group=IIOP_GROUP
-      - nacos:iiop-auth.yaml?group=IIOP_GROUP
+      - nacos:iiop-shared.yaml?group=${NACOS_GROUP:IIOP_GROUP}
+      - nacos:iiop-auth.yaml?group=${NACOS_GROUP:IIOP_GROUP}
 ```
 
 M2 真正实现时若 namespace 的实际 ID 与名称不同，以 Nacos 控制台创建后得到的 namespace ID 为准，并通过环境变量传入。
@@ -914,12 +915,11 @@ Gateway 为转发请求增加 Sa-Token 官方 Same-Token Header。
 | inspection | auth |
 | maintenance | device |
 | maintenance | auth |
-| maintenance | ai（读取已生成诊断） |
 | ai | device |
 | ai | inspection |
 | ai | maintenance |
 
-禁止形成 A → B → A 的同步循环依赖。
+禁止形成 A → B → A 的同步循环依赖。maintenance 不同步调用 ai；AI 诊断完成后通过 RocketMQ 事件把 diagnosisId 传给 maintenance，前端需要完整诊断详情时直接调用 iiop-ai。
 
 ## 13.2 内部 API 前缀
 
@@ -1129,7 +1129,69 @@ iiop-ai
 - iiop-maintenance
 - iiop-auth 通知逻辑
 
-## 15.6 Consumer Group
+## 15.6 Spring Cloud Stream Binding 命名
+
+第一版固定以下函数和 binding 名，避免每个服务自行发明命名。
+
+### inspection
+
+生产绑定：
+
+- binding：`abnormal-out-0`
+- destination：`iiop.inspection.abnormal`
+
+### maintenance
+
+消费函数：
+
+- `inspectionAbnormalConsumer`
+
+消费绑定：
+
+- `inspectionAbnormalConsumer-in-0`
+- destination：`iiop.inspection.abnormal`
+- group：`iiop-maintenance-abnormal-consumer`
+
+生产绑定：
+
+- `alarm-out-0` → `iiop.maintenance.alarm`
+- `workorder-out-0` → `iiop.maintenance.workorder`
+
+### ai
+
+消费函数：
+
+- `aiAbnormalConsumer`
+- `aiAlarmConsumer`
+
+绑定：
+
+- `aiAbnormalConsumer-in-0` → `iiop.inspection.abnormal`
+- `aiAlarmConsumer-in-0` → `iiop.maintenance.alarm`
+
+对应 group 必须不同于 maintenance 和 auth 的 group。
+
+生产绑定：
+
+- `diagnosis-out-0` → `iiop.ai.diagnosis`
+
+### auth
+
+通知消费函数：
+
+- `alarmNotificationConsumer`
+- `workorderNotificationConsumer`
+- `aiNotificationConsumer`
+
+分别消费：
+
+- `iiop.maintenance.alarm`
+- `iiop.maintenance.workorder`
+- `iiop.ai.diagnosis`
+
+Spring Cloud Stream 使用函数式 Consumer/Function 模式。实际 `spring.cloud.function.definition` 和 bindings 配置按本节名称生成。
+
+## 15.7 Consumer Group
 
 每个业务目的使用独立 Group。
 
@@ -1143,7 +1205,7 @@ iiop-ai
 
 不同业务目的不得错误使用同一个 consumer group，否则集群消费会导致只有其中一方获得消息。
 
-## 15.7 幂等
+## 15.8 幂等
 
 每次消费：
 
@@ -1160,7 +1222,7 @@ iiop-ai
 
 用于第二层去重。
 
-## 15.8 发送时机
+## 15.9 发送时机
 
 重要事件只能在本地数据库事务成功后发送。
 
