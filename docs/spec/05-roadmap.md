@@ -330,7 +330,7 @@ G0 结论：
 
 **PASS。**
 
-随后根据项目单人开发和“不要过度复杂”的要求执行了一次减法收口，删除 AI Assistant、Chat Memory、Tool Calling、STOMP、Actuator 等非核心能力，数据库缩减为 25 张表，AI 工作流缩减为 5 个节点。
+随后根据单人开发和控制复杂度的要求执行减法收口：数据库缩减为 25 张表，AI 仅保留结构化诊断，LangGraph4j 固定 5 节点，WebSocket 使用原生 JSON 推送。
 
 从本次 G0 完成开始，00 到 05 作为第一版冻结基线。真实编码若暴露新的兼容问题，先记录事实，再受控修改对应 spec。
 
@@ -796,7 +796,6 @@ feat: implement authentication service
 9. CORS；
 10. requestId；
 11. 基础 Sentinel；
-12. Actuator。
 
 ## 16.3 验收链
 
@@ -1709,7 +1708,7 @@ feat: add Three.js equipment scene
 
 实现：
 
-1. 8 节点类型；
+1. 5 个基础节点类型；
 2. add；
 3. drag；
 4. edge；
@@ -1724,7 +1723,7 @@ feat: add Three.js equipment scene
 1. flow_definition 真入库；
 2. 刷新后回显；
 3. 不承担业务引擎执行；
-4. AI node 只表达流程语义。
+4. 流程图只表达巡检流程语义，不承担后端执行引擎。
 
 Commit：
 
@@ -1738,8 +1737,8 @@ feat: add inspection flow designer
 
 实现：
 
-1. 原生 WebSocket；
-2. user queue；
+1. 浏览器原生 WebSocket；
+2. JSON 通知消息；
 3. reconnect；
 4. notification store；
 5. unread；
@@ -2571,16 +2570,13 @@ ChatGPT 给最小修复 Prompt。
 本项目明确不采用：
 
 1. 一次性生成整个系统；
-2. 先生成所有 Controller 再补业务；
-3. 所有服务共享同一批 Entity；
-4. 一个 common 模块承载所有 DTO；
-5. 前端大量 Mock 后最后一天才联调；
-6. AI 最后只补一个 DeepSeek HTTP 接口；
-7. 为了展示 LangChain4j 再增加 AI Assistant、Chat Memory 或 Tool Calling；
-7. 为展示技术强行引入 Kafka/Seata/Elasticsearch/向量库；
-8. 为了“微服务”继续拆十几个服务；
-9. 为了“实时”模拟高频随机设备数据；
-10. 为了答辩伪造测试和运行证据。
+2. 所有服务共享 Entity 或跨库访问；
+3. 前端长期依赖 Mock；
+4. 为展示技术继续增加微服务或中间件；
+5. AI 聊天助手、RAG、多智能体、自治 Agent；
+6. 复杂分布式事务框架；
+7. 模拟高频随机工业数据冒充真实采集；
+8. 伪造测试、日志、性能数据和 Git 历史。
 
 ---
 
