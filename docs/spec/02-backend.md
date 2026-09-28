@@ -1,2476 +1,300 @@
-# IIOP 后端架构与实现规范
+# IIOP 后端实现规范（最简版）
 
-> 文档编号：IIOP-SPEC-02  
-> 文档性质：后端工程、微服务通信、认证授权与基础设施实现基线  
-> 上位规范：`docs/spec/00-overview.md`、`docs/spec/01-database.md`  
-> 适用对象：Codex、后端开发、代码审查、联调与测试  
-> 当前状态：设计基线。后续 Codex 生成后端代码时必须优先遵循本文档。
+> 目标：Codex 只实现课程项目需要的最小真实后端
 
----
+## 1. 固定版本
 
-## 1. 文档目的
+- JDK 17
+- Spring Boot 3.5.0
+- Spring Cloud 2025.0.0
+- Spring Cloud Alibaba 2025.0.0.0
+- MyBatis-Plus 3.5.17
+- Sa-Token 1.46.0
+- Nacos 3.0.3
+- Sentinel 1.8.9
+- RocketMQ 5.3.1
 
-本文档回答后端实现阶段必须提前固定的问题：
+禁止自行升级核心版本。
 
-1. 6 个可启动微服务和 1 个公共模块怎样组织；
-2. Maven 依赖应该放到哪个模块；
-3. Gateway 使用哪一种技术栈和配置前缀；
-4. Nacos 如何同时承担注册发现和配置管理；
-5. Sa-Token 如何处理登录、RBAC、网关鉴权和微服务内部调用；
-6. Redis 的职责和 Key 如何规划；
-7. OpenFeign 的调用方向、DTO 和降级边界如何定义；
-8. RocketMQ 的 Topic、事件结构和幂等规则如何设计；
-9. Sentinel 应保护哪些资源；
-10. WebSocket 放在哪个服务中；
-11. Controller、Service、Mapper、DTO、VO、Entity 如何分层；
-12. 各服务暴露哪些 REST API；
-13. 事务、状态机、异常、日志、测试和启动验收如何执行。
+## 2. 服务与端口
 
-后续实现若与本文档冲突，Codex 不得自行选择“更方便”的做法。应停止并报告，由项目设计先修改规范。
+- gateway：8080
+- auth：9201
+- device：9202
+- inspection：9203
+- maintenance：9204
+- ai：9205
 
----
+客户端只访问 Gateway。
 
-# 2. 已核实的后端技术基线
+## 3. common
 
-## 2.1 Spring 技术栈
+只保留：
 
-固定：
+- Result<T>
+- PageResult<T>
+- ErrorCode
+- BizException
+- traceId/requestId
+- 必要公共 DTO
 
-| 技术 | 版本 |
-|---|---|
-| JDK | 17 |
-| Spring Boot | 3.5.0 |
-| Spring Cloud | 2025.0.0 |
-| Spring Cloud Alibaba | 2025.0.0.0 |
-| Spring Cloud Gateway | 4.3.0，由 Spring Cloud BOM 管理 |
-| Spring Cloud OpenFeign | 4.3.0，由 Spring Cloud BOM 管理 |
-| Nacos | 3.0.3 |
-| Sentinel | 1.8.9 |
-| RocketMQ | 5.3.1 |
+common 不启动，不放业务 Service、Mapper、Entity。
 
-说明：
+## 4. Gateway
 
-- Spring Cloud 2025.0.0 官方与 Spring Boot 3.5.0 对应；
-- Spring Cloud Alibaba 2025.0.0.0 官方兼容矩阵对应 Spring Cloud 2025.0.0 和 Spring Boot 3.5.0；
-- Spring Cloud 2025.0.0 中 Gateway 和 OpenFeign 均进入 4.3.0 版本线；
-- 项目固定该基线是为了符合既定实训技术要求，开发过程中禁止 Codex 自行升级到 Spring Boot 4 或 Spring Cloud 2025.1.x。
+Gateway 只做：
 
-## 2.2 Spring Cloud Gateway 选择
+- 显式路由
+- 登录态检查
+- CORS
+- requestId/traceId
+- 一个 Sentinel 限流规则
+- WebSocket 转发
 
-项目明确使用 **Gateway Server WebFlux**。
+固定路由：
 
-Maven artifact：
+- /api/auth/** -> iiop-auth
+- /api/device/** -> iiop-device
+- /api/inspection/** -> iiop-inspection
+- /api/maintenance/** -> iiop-maintenance
+- /api/ai/** -> iiop-ai
+- /ws/** -> iiop-auth
 
-```xml
-<dependency>
-    <groupId>org.springframework.cloud</groupId>
-    <artifactId>spring-cloud-starter-gateway-server-webflux</artifactId>
-</dependency>
-```
+/internal/** 不配置 Gateway 路由。
 
-原因：
+不做复杂全局异常体系、动态路由、灰度、熔断矩阵或 Same-Token 全局认证。
 
-1. Spring Cloud 2025.0 已将原 `spring-cloud-starter-gateway` 标记为旧名称；
-2. 新的 WebFlux starter 名称明确区分 Gateway Server WebFlux 与 Server Web MVC；
-3. Sa-Token 对 Spring Cloud Gateway 的官方方案提供 Reactor 集成；
-4. WebSocket 代理由 WebFlux Gateway 直接支持。
+## 5. Auth
 
-Gateway 模块禁止引入：
+实现：
 
-- `spring-boot-starter-web`
-- Servlet MVC Controller 业务代码
-- MyBatis-Plus
-- MySQL Driver
+- login
+- logout
+- me
+- 用户 CRUD
+- 角色 CRUD
+- 用户角色
+- 角色权限
+- 权限查询
+- 通知列表/未读/已读
+- BCrypt
+- Sa-Token + Redis
 
-Gateway 使用新的配置前缀：
+权限码直接使用现有数据库 seed。
 
-`spring.cloud.gateway.server.webflux.*`
+不新增第二套认证机制。
 
-Codex 不得继续生成旧版 `spring.cloud.gateway.routes` 作为项目正式配置。
+## 6. Nacos
 
-## 2.3 MyBatis-Plus
+第一版只要求 Discovery。
 
-固定使用 Spring Boot 3 starter：
+所有可启动服务：
 
-`com.baomidou:mybatis-plus-spring-boot3-starter`
+- 注册到 Nacos
+- namespace：iiop-dev
+- group：IIOP_GROUP
 
-当前实现基线：
+`NACOS_NAMESPACE` 通过本机环境变量传入，避免把本机 UUID 写死。
 
-`3.5.17`
+Nacos Config 不是必做验收项。已有配置接入若稳定可保留，不继续做 DataId 治理、热更新或容灾测试。
 
-分页插件需要显式加入：
+## 7. Redis
 
-`com.baomidou:mybatis-plus-jsqlparser`
+第一版只强制用于 Sa-Token Session。
 
-不得同时重复引入：
+如果 RocketMQ 幂等需要，可增加一个简单 eventId Key。
 
-- mybatis-spring-boot-starter
-- 另一套 MyBatis starter
-- Spring Boot 2 专用的 mybatis-plus-boot-starter
+不做分布式锁、多级缓存、Dashboard 缓存体系。
 
-## 2.4 Sa-Token
+## 8. Device
 
-当前实现基线：
+对应 iiop_device 五张表。
 
-`1.46.0`
+公共 API 最小范围：
 
-Spring Boot 3 MVC 服务使用：
+- categories CRUD/tree
+- devices CRUD/list/detail
+- device status/risk update
+- metrics CRUD
+- metric data list/snapshot/trend
+- SOP CRUD
+- statistics overview
 
-`sa-token-spring-boot3-starter`
+内部 AI API：
 
-Gateway WebFlux 使用：
+- GET /internal/device/devices/{id}/ai-context
+- GET /internal/device/devices/{id}/sop-context
 
-`sa-token-reactor-spring-boot3-starter`
+复杂 SQL 能用 MyBatis-Plus 完成就不用 XML。
 
-分布式会话使用：
+## 9. Inspection
 
-`sa-token-redis-template`
+对应六张 inspection 表。
 
-项目第一版不采用 Sa-Token JWT 模式。
+最小 API：
 
-第一版采用 Sa-Token 原生 Token + Redis 分布式 Session，减少 JWT 密钥、续签和撤销逻辑的额外复杂度。
+- templates CRUD
+- template items CRUD
+- plans CRUD
+- POST /plans/{id}/generate-task
+- tasks list/detail
+- start task
+- submit task item
+- complete task
+- abnormals list/detail/create
 
----
+第一版任务生成采用人工触发，不实现复杂定时调度。
 
-# 3. 服务名称与端口
+创建 abnormal 后发送：
 
-本地开发端口固定如下：
+destination：`iiop.inspection.abnormal`
 
-| 模块 | spring.application.name | HTTP 端口 |
-|---|---|---:|
-| iiop-gateway | iiop-gateway | 8080 |
-| iiop-auth | iiop-auth | 9201 |
-| iiop-device | iiop-device | 9202 |
-| iiop-inspection | iiop-inspection | 9203 |
-| iiop-maintenance | iiop-maintenance | 9204 |
-| iiop-ai | iiop-ai | 9205 |
+事件只需要：
 
-基础设施默认开发端口：
+- eventId
+- abnormalId
+- deviceId
+- severity
+- title
+- occurredAt
 
-| 基础设施 | 端口 |
-|---|---:|
-| MySQL | 3306 |
-| Redis | 6379 |
-| Nacos | 8848 |
-| RocketMQ NameServer | 9876 |
-| Sentinel Dashboard | 8858 |
+## 10. Maintenance
 
-Sentinel 客户端 transport 端口在同一开发机上不得冲突，规划：
+对应六张 maintenance 表。
 
-| 服务 | Sentinel transport port |
-|---|---:|
-| gateway | 8719 |
-| auth | 8720 |
-| device | 8721 |
-| inspection | 8722 |
-| maintenance | 8723 |
-| ai | 8724 |
+最小 API：
 
-端口属于本地开发约定。若本机发生端口冲突，可通过环境变量调整，但 README 和运行脚本必须同步。
+- alarms list/detail/process
+- defects list/detail
+- work-orders CRUD/list/detail
+- assign/start/complete
+- maintenance record
+- acceptance
 
----
+消费 `iiop.inspection.abnormal`：
 
-# 4. Maven 父工程设计
+- 同一 abnormalId 不重复创建 defect
+- 创建成功即可
 
-`backend/pom.xml` 继续作为聚合父工程。
+不再要求 maintenance 与 AI 之间通过 MQ 传 diagnosisId。
 
-父工程职责：
+AI 结果由前端调用 ai 服务查看，工单若需要 diagnosisId，可以在人工创建/确认时直接传入。
 
-1. 管理 7 个子模块；
-2. 统一 Java 17；
-3. 引入 Spring Boot Parent 3.5.0；
-4. 导入 Spring Cloud BOM 2025.0.0；
-5. 导入 Spring Cloud Alibaba BOM 2025.0.0.0；
-6. 管理 MyBatis-Plus 3.5.17；
-7. 管理 Sa-Token 1.46.0；
-8. 统一 compiler、test 等插件的版本策略。
+## 11. RocketMQ
 
-建议父工程增加：
+第一版只保留一个 Topic：
 
-```xml
-<properties>
-    <java.version>17</java.version>
-    <spring-cloud.version>2025.0.0</spring-cloud.version>
-    <spring-cloud-alibaba.version>2025.0.0.0</spring-cloud-alibaba.version>
-    <mybatis-plus.version>3.5.17</mybatis-plus.version>
-    <sa-token.version>1.46.0</sa-token.version>
-</properties>
-```
+`iiop.inspection.abnormal`
 
-MyBatis-Plus 与 Sa-Token 的版本由父工程统一管理，子模块不得重复写版本号。
+生产者：
 
-AI 依赖版本不在本文档中提前固定，由 `04-ai.md` 单独确定。
+- inspection
 
----
+消费者：
 
-# 5. 模块依赖矩阵
+- maintenance
 
-原则：
+作用：
 
-- 依赖只放到真正使用它的模块；
-- 禁止把所有 starter 全塞进父 POM；
-- 父 POM 的 `dependencyManagement` 只管理版本；
-- 子模块的 `dependencies` 表达真实能力。
+- 证明真实异步微服务事件链
 
-## 5.1 iiop-common
+不实现其他 Topic，不做 Outbox、事务消息、复杂补偿或消息治理平台。
 
-性质：普通 Jar，不启动。
+简单幂等：
 
-允许：
+- 以 abnormalId 或 eventId 判断重复
+- 数据库唯一约束优先
+- 必要时 Redis Key 辅助
 
-- 纯 Java 公共模型；
-- `Result<T>`；
-- `PageResult<T>`；
-- 公共错误码；
-- `BizException`；
-- 公共常量；
-- MQ 事件信封基础对象；
-- 请求链路 ID 常量。
+## 12. Sentinel
 
-尽量不依赖 Spring Boot starter。
+只需要在 Gateway 配置一个可演示限流规则。
 
-禁止：
+优先保护：
 
-- DataSource；
-- Mapper；
-- Controller；
-- Redis；
-- Nacos；
-- Sa-Token starter；
-- RocketMQ；
-- 具体业务 Entity。
+POST /api/auth/login
 
-## 5.2 iiop-gateway
+返回：
 
-依赖：
+- HTTP 429
+- 简单统一错误 JSON
 
-- `spring-cloud-starter-gateway-server-webflux`
-- `spring-cloud-starter-loadbalancer`
-- `spring-cloud-starter-alibaba-nacos-discovery`
-- `spring-cloud-starter-alibaba-nacos-config`
-- `spring-cloud-starter-alibaba-sentinel`
-- `spring-cloud-alibaba-sentinel-gateway`
-- `sa-token-reactor-spring-boot3-starter`
-- `sa-token-redis-template`
-- `spring-boot-starter-data-redis`
-- `iiop-common`
+不做大量接口规则、动态规则中心、集群流控。
 
-禁止：
+## 13. WebSocket
 
-- Spring MVC starter；
-- MyBatis-Plus；
-- MySQL；
-- 业务 Entity；
-- 业务 Service。
+放在 auth。
 
-## 5.3 iiop-auth
+使用 Spring 原生 WebSocket：
 
-依赖：
+- TextWebSocketHandler
+- /ws/notifications
+- JSON 文本消息
+- 浏览器原生 WebSocket
 
-- `spring-boot-starter-web`
-- `spring-boot-starter-validation`
-- `spring-boot-starter-websocket`
-- `spring-boot-starter-data-redis`
-- `spring-security-crypto`
-- `mybatis-plus-spring-boot3-starter`
-- `mybatis-plus-jsqlparser`
-- `mysql-connector-j`
-- Nacos Discovery
-- Nacos Config
-- `sa-token-spring-boot3-starter`
-- `sa-token-redis-template`
-- Spring Cloud Stream RocketMQ binder
-- `iiop-common`
+第一版单实例：
 
-auth 第一版不需要 OpenFeign。RocketMQ 仅用于消费告警、工单和 AI 诊断事件并生成持久化通知。
+- 内存保存 userId -> session
+- REST 查询 sys_notification 为事实来源
+- WebSocket 只做实时提醒
 
-## 5.4 iiop-device
+不使用 STOMP、SockJS、Redis Pub/Sub。
 
-依赖：
+通知生成可以通过 auth 内部方法或最简单的内部 REST 调用完成，不再设计通知 MQ 体系。
 
-- Spring Web
-- Validation
-- MyBatis-Plus Boot3 Starter
-- MyBatis-Plus JSqlParser
-- MySQL Driver
-- Redis
-- Nacos Discovery
-- Nacos Config
-- OpenFeign
-- Spring Cloud LoadBalancer
-- Sa-Token Boot3
-- Sa-Token Redis
-- iiop-common
-
-device 不引入 RocketMQ，除非后续真实业务需要设备状态事件。
-
-## 5.5 iiop-inspection
-
-依赖：
-
-- Spring Web
-- Validation
-- MyBatis-Plus
-- MySQL
-- Nacos Discovery/Config
-- OpenFeign
-- LoadBalancer
-- Sa-Token Boot3 + Redis
-- Spring Cloud Stream RocketMQ binder
-- iiop-common
+## 14. AI 内部调用
 
-inspection 是 `iiop.inspection.abnormal` 的生产者。
+AI 通过 OpenFeign 读取：
 
-## 5.6 iiop-maintenance
+- device ai-context
+- inspection recent history
+- maintenance history
 
-依赖：
+只读。
 
-- Spring Web
-- Validation
-- MyBatis-Plus
-- MySQL
-- Nacos Discovery/Config
-- OpenFeign
-- LoadBalancer
-- Sa-Token Boot3 + Redis
-- Spring Cloud Stream RocketMQ binder
-- iiop-common
+不要求 Same-Token。/internal/** 只是不经 Gateway 暴露。
 
-maintenance 同时是异常事件消费者、维护事件生产者。
+## 15. 配置和 Secret
 
-## 5.7 iiop-ai
+真实密码/API Key 不进入 Git。
 
-后端基础依赖：
+使用环境变量：
 
-- Spring Web
-- Validation
-- MyBatis-Plus
-- MySQL
-- Nacos Discovery/Config
-- OpenFeign
-- LoadBalancer
-- Sa-Token Boot3 + Redis
-- Spring Cloud Stream RocketMQ binder
-- iiop-common
+- MYSQL_*_PASSWORD
+- REDIS_PASSWORD
+- DEEPSEEK_API_KEY
+- NACOS_NAMESPACE
 
-LangChain4j、LangGraph4j、DeepSeek 只用于结构化设备诊断，具体依赖由 `04-ai.md` 定义。
+本地 application.yml 可以保留安全默认值和环境变量占位符。
 
----
+## 16. 统一响应
 
-# 6. Java 包结构
+普通 JSON API：
 
-每个业务服务采用统一分层。
-
-以 `iiop-device` 为例：
-
-```text
-com.iiop.device
-├─ DeviceApplication.java
-├─ config
-├─ controller
-├─ service
-│  └─ impl
-├─ mapper
-├─ domain
-│  ├─ entity
-│  ├─ dto
-│  ├─ vo
-│  └─ query
-├─ enums
-├─ client
-│  ├─ feign
-│  └─ dto
-├─ mq
-│  ├─ producer
-│  └─ consumer
-├─ security
-├─ support
-└─ task
-```
-
-规则：
-
-- `controller` 只负责协议层；
-- `service` 负责业务规则和事务；
-- `mapper` 只负责当前服务数据库；
-- `entity` 与数据库表一一对应；
-- `dto` 用于写请求；
-- `vo` 用于对外返回；
-- `query` 用于复杂查询条件；
-- `client.feign` 只放跨服务客户端；
-- `client.dto` 只放跨服务契约；
-- `mq` 只放事件发布和消费；
-- `task` 只放真实的定时任务；
-- 禁止 Controller 直接调用 Mapper；
-- 禁止对外直接返回 Entity；
-- 禁止跨服务共享 Entity。
-
----
-
-# 7. iiop-common 公共模型
-
-## 7.1 Result<T>
-
-统一 HTTP 响应：
-
-```json
 {
   "code": 0,
   "message": "success",
   "data": {},
   "traceId": "..."
 }
-```
 
-字段：
-
-- `code`：业务码；
-- `message`：用户可理解的信息；
-- `data`：数据；
-- `traceId`：请求链路标识。
-
-成功：
-
-`code = 0`
-
-## 7.2 PageResult<T>
-
-统一分页：
-
-```json
-{
-  "pageNum": 1,
-  "pageSize": 20,
-  "total": 100,
-  "records": []
-}
-```
-
-前端请求参数固定：
-
-- pageNum，从 1 开始；
-- pageSize，默认 20；
-- 第一版最大 100。
-
-## 7.3 错误码分区
-
-建议：
-
-| 范围 | 含义 |
-|---|---|
-| 0 | 成功 |
-| 40000-40099 | 参数格式、校验和一般请求错误 |
-| 40100-40199 | 未登录/Token 问题 |
-| 40300-40399 | 权限问题 |
-| 40400-40499 | 业务对象不存在 |
-| 40900-40999 | 状态冲突/重复操作 |
-| 42900-42999 | 限流 |
-| 50000-50999 | 系统内部异常 |
-| 50300-50399 | 下游或外部依赖不可用 |
-
-业务异常不得直接把 SQL 异常、堆栈或密钥信息返回前端。
-
----
-
-# 8. 全局异常与参数校验
-
-所有 MVC 业务服务使用：
-
-`@RestControllerAdvice`
-
-统一处理：
-
-- `MethodArgumentNotValidException`
-- `ConstraintViolationException`
-- `BizException`
-- Sa-Token 登录异常
-- Sa-Token 权限异常
-- Feign 调用异常
-- 兜底 Exception
-
-Gateway 使用 WebFlux 异常处理机制，禁止复制 MVC Advice。
-
-规则：
-
-1. 参数错误返回明确字段级提示；
-2. 业务状态冲突使用业务码；
-3. 下游服务不可用返回 503 类业务码；
-4. 未识别异常仅记录 traceId，客户端收到通用错误；
-5. 生产/答辩模式不向前端泄露 stack trace。
-
----
-
-# 9. MyBatis-Plus 统一规则
-
-## 9.1 Mapper
-
-Mapper：
-
-`extends BaseMapper<Entity>`
-
-简单 CRUD 使用 BaseMapper。
-
-只有确实需要复杂聚合查询时编写 XML。
-
-禁止为了展示 MyBatis XML 而把简单 CRUD 重写成 XML。
-
-## 9.2 分页
-
-统一注册：
-
-`MybatisPlusInterceptor + PaginationInnerInterceptor(DbType.MYSQL)`
-
-所有列表 API 的分页结果转换为 `PageResult<T>`。
-
-## 9.3 ID
-
-所有 Entity：
-
-`@TableId(type = IdType.ASSIGN_ID)`
-
-Java 类型：
-
-`Long`
-
-## 9.4 逻辑删除
-
-只有数据库规范中明确存在 `deleted` 的表使用：
-
-`@TableLogic`
-
-禁止给交易历史表擅自增加逻辑删除。
-
-## 9.5 自动填充
-
-对 `created_at`、`updated_at` 使用统一 `MetaObjectHandler`。
-
-数据库默认值仍保留，Java 自动填充作为应用侧一致实现。
-
-## 9.6 Enum
-
-状态字段在 Java 中优先使用 Enum。
-
-枚举持久化值必须和 `01-database.md` 完全一致。
-
-不得使用枚举 ordinal 入库。
-
-## 9.7 JSON
-
-数据库 JSON 字段使用统一 Jackson 序列化策略。
-
-使用 MyBatis-Plus `JacksonTypeHandler` 时：
-
-- Entity 需要正确开启 `autoResultMap`；
-- 字段明确指定 TypeHandler；
-- Java 类型应为明确 DTO/List/Map，避免到处使用 Object。
-
----
-
-# 10. Nacos 注册发现与配置管理
-
-第一版只实现能够证明 Nacos 被真实使用的最小闭环，不做生产级配置治理。
-
-## 10.1 Namespace 和 Group
-
-开发环境使用独立 Namespace：
-
-`iiop-dev`
-
-Group：
-
-`IIOP_GROUP`
-
-服务必须能够注册到该 namespace/group。
-
-## 10.2 application.yml
-
-本地 `application.yml` 可以保留：
-
-- spring.application.name；
-- server.port；
-- Nacos server address；
-- namespace/group；
-- `spring.config.import`；
-- profile；
-- 安全的非敏感默认值；
-- 环境变量占位符。
-
-不再要求把所有业务配置强制搬到 Nacos。
-
-真实密码、Token、DeepSeek Key 等 Secret 仍然只能通过环境变量或本地未提交配置提供。
-
-## 10.3 配置中心最小要求
-
-Spring Cloud Alibaba 2025.x 继续使用：
-
-`spring.config.import`
-
-禁止使用 `bootstrap.yml` 作为正式方案。
-
-第一版只需证明 Config Center 能被真实读取：
-
-1. 至少使用一个项目 DataId；
-2. 推荐使用 `iiop-shared.yaml` 保存跨服务的非敏感开发配置或默认值；
-3. 服务专属 DataId 仅在确实能减少重复配置时再增加；
-4. 不要求动态刷新、灰度、版本治理、配置回滚或高可用演练。
-
-示例：
-
-```yaml
-spring:
-  config:
-    import:
-      - optional:nacos:iiop-shared.yaml?group=${NACOS_GROUP:IIOP_GROUP}
-```
-
-实际 namespace ID 通过 `NACOS_NAMESPACE` 环境变量传入，不把本机 UUID 固化到仓库。
-
-## 10.4 敏感变量
-
-不得在 Git 或可提交的 Nacos 示例文件中写真实：
-
-- MYSQL_PASSWORD
-- REDIS_PASSWORD
-- DeepSeek API Key
-- Same-Token Secret
-- 其他 Secret
-
-本项目不测试 Nacos 配置中心的生产级容灾、热更新或配置删除故障场景。
-
----
-
-# 11. Gateway 设计
-
-## 11.1 固定路由
-
-不启用“发现一个服务就自动公开一个路由”的全开放 Discovery Locator。
-
-显式配置：
-
-| Route ID | Path | URI |
-|---|---|---|
-| auth-api | /api/auth/** | lb://iiop-auth |
-| device-api | /api/device/** | lb://iiop-device |
-| inspection-api | /api/inspection/** | lb://iiop-inspection |
-| maintenance-api | /api/maintenance/** | lb://iiop-maintenance |
-| ai-api | /api/ai/** | lb://iiop-ai |
-| auth-websocket | /ws/** | lb:ws://iiop-auth |
-
-使用 Spring Cloud 2025.0 的新配置层级：
-
-`spring.cloud.gateway.server.webflux.routes`
-
-`/internal/**` 禁止在 Gateway 配置公开路由。
-
-## 11.2 Gateway 请求处理顺序
-
-推荐：
-
-1. 生成或透传 X-Request-Id；
-2. 处理 CORS；
-3. Sentinel 入口保护；
-4. Sa-Token 登录检查；
-5. 增加 Same-Token；
-6. 转发下游服务；
-7. 统一处理网关级错误。
-
-## 11.3 白名单
-
-仅开放必要路径：
-
-- POST /api/auth/login
-- OPTIONS /**
-- WebSocket 初始握手路径
-
-
-## 11.4 CORS
-
-开发阶段允许：
-
-- PC Vite 开发地址；
-- HarmonyOS 调试来源按实际网络模型处理。
-
-最终禁止无条件同时使用：
-
-`allowedOrigins = *`
-
-与：
-
-`allowCredentials = true`
-
-CORS 配置集中在 Gateway，业务服务不重复配置跨域。
-
----
-
-# 12. Sa-Token 认证与 RBAC
-
-## 12.1 总体策略
-
-采用三层概念：
-
-1. **用户登录态**：Sa-Token + Redis；
-2. **业务权限**：RBAC + Sa-Token Permission；
-3. **微服务来源可信**：Same-Token。
-
-## 12.2 登录流程
-
-```text
-PC/HarmonyOS
-→ Gateway
-→ iiop-auth /api/auth/login
-→ 查询 sys_user
-→ 校验状态
-→ BCrypt 校验密码
-→ 查询用户角色和权限
-→ StpUtil.login(userId)
-→ 将角色/权限快照写入 SaSession
-→ 返回 tokenName + tokenValue + 用户摘要
-```
-
-密码：
-
-- 使用 BCrypt；
-- 只保存 `password_hash`；
-- 不自行实现 MD5/SHA 拼接密码方案。
-
-## 12.3 登录返回
-
-建议：
-
-```json
-{
-  "tokenName": "satoken",
-  "tokenValue": "...",
-  "user": {
-    "id": "...",
-    "username": "...",
-    "realName": "..."
-  },
-  "roles": ["ADMIN"],
-  "permissions": ["device:view"]
-}
-```
-
-## 12.4 权限缓存策略
-
-登录成功时 auth 从数据库加载：
-
-- roleCodes；
-- permissionCodes。
-
-写入当前登录用户的 SaSession。
-
-各业务服务中的 `StpInterface` 从共享 Redis 中的 SaSession 获取权限列表。
-
-这样避免每次权限校验都远程调用 auth 数据库。
-
-角色或权限发生修改后：
-
-- 清理相关业务权限缓存；
-- 对受影响用户执行重新登录要求或踢下线；
-- 下一次登录重新构建权限快照。
-
-## 12.5 Gateway 登录校验
-
-Gateway 负责：
-
-- 白名单；
-- 其余 `/api/**` 检查登录。
-
-Gateway 不承担全部细粒度业务权限判断。
-
-原因：
-
-- 权限与具体业务接口更接近；
-- 避免 Gateway 维护一份重复的业务权限路由表；
-- 下游服务仍可通过注解明确表达权限。
-
-## 12.6 下游权限
-
-Controller/Service 的用户业务入口使用：
-
-- `@SaCheckLogin`
-- `@SaCheckPermission`
-- 必要时 `@SaCheckRole`
-
-权限编码以 01-database.md 的 seed 清单为唯一基线。
-
-固定权限：
-
-### 通用与设备
-
-- dashboard:view
-- device:view
-- device:create
-- device:update
-- device:delete
-
-### 巡检
-
-- inspection:view
-- inspection:template:manage
-- inspection:plan:manage
-- inspection:execute
-- inspection:abnormal:process
-
-### 运维
-
-- maintenance:view
-- maintenance:alarm:process
-- maintenance:defect:process
-- maintenance:workorder:create
-- maintenance:workorder:process
-- maintenance:workorder:accept
-
-### AI
-
-- ai:view
-- ai:diagnosis
-- ai:confirm
-
-### 系统管理
-
-- system:user:view
-- system:user:create
-- system:user:update
-- system:user:delete
-- system:user:role
-- system:role:view
-- system:role:create
-- system:role:update
-- system:role:delete
-- system:role:permission
-- system:permission:view
-- system:permission:create
-- system:permission:update
-- system:permission:delete
-
-后续若需要新增权限码，必须先修改 01、02、03 的规范和 seed，再写代码。
-
-## 12.7 Same-Token
-
-Gateway 为转发请求增加 Sa-Token 官方 Same-Token Header。
-
-业务服务使用全局 Servlet Filter 校验 Same-Token。
-
-效果：
-
-- 浏览器不能绕过 Gateway 直接访问 9201-9205 的业务 API；
-- Gateway 转发请求可通过；
-- Feign 内部调用可通过。
-
-课程开发环境采用 Sa-Token 默认的 Same-Token 生命周期即可，不额外创建 Token 刷新微服务。
-
-## 12.8 Feign 内部鉴权
-
-所有 Feign 请求通过统一 `RequestInterceptor` 写入 Same-Token。
-
-内部接口只要求：
-
-- Same-Token 校验；
-- 必要的业务参数校验。
-
-内部接口不要求存在最终用户登录态。
-
-这样 MQ 消费者或后台任务也可以正常发起内部服务调用。
-
----
-
-# 13. OpenFeign 设计
-
-## 13.1 使用方向
-
-允许：
-
-| 调用方 | 被调用方 |
-|---|---|
-| device | auth（必要的用户摘要/存在性） |
-| inspection | device |
-| inspection | auth |
-| maintenance | device |
-| maintenance | auth |
-| ai | device |
-| ai | inspection |
-| ai | maintenance |
-
-禁止形成 A → B → A 的同步循环依赖。maintenance 不同步调用 ai；AI 诊断完成后通过 RocketMQ 事件把 diagnosisId 传给 maintenance，前端需要完整诊断详情时直接调用 iiop-ai。
-
-## 13.2 内部 API 前缀
-
-所有跨服务内部接口统一：
-
-`/internal/**`
-
-示例：
-
-- `GET /internal/auth/users/{id}/summary`
-- `GET /internal/device/devices/{id}/context`
-- `GET /internal/inspection/devices/{id}/recent-history`
-- `GET /internal/maintenance/devices/{id}/history`
-
-Gateway 不路由 `/internal/**`。
-
-## 13.3 DTO
-
-Feign DTO 必须独立于 Entity。
-
-例如 `DeviceContextDTO` 可以包含：
-
-- id
-- deviceCode
-- deviceName
-- categoryName
-- model
-- status
-- riskLevel
-- workshop
-- productionLine
-- installLocation
-- currentMetrics
-
-不得把 `DevDevice` Entity 直接作为 Feign 返回类型。
-
-## 13.4 超时
-
-内部调用必须配置：
-
-- connect timeout；
-- read timeout。
-
-AI 获取上下文时，非关键历史接口超时可以降级为空列表。
-
-设备核心信息获取失败时，AI 诊断必须失败，不能编造设备数据。
-
----
-
-# 14. Redis 设计
-
-第一版 Redis 只实现当前业务确实使用到的能力。
-
-## 14.1 必做范围
-
-1. Sa-Token 分布式 Session；
-2. 权限快照；
-3. RocketMQ 消费幂等 Key。
-
-可选：
-
-- Dashboard 短缓存；
-- 设备最新状态短缓存。
-
-只有在真实页面或接口出现重复查询需要时才增加可选缓存。
-
-第一版不实现通用分布式锁体系，也不建立多级缓存框架。
-
-## 14.2 Key 规范
-
-项目自定义 Key 使用统一前缀：
-
-`iiop:`
-
-当前允许的典型 Key：
-
-```text
-iiop:event:consumed:{consumer}:{eventId}
-iiop:device:status:{deviceId}
-iiop:dashboard:{name}
-```
-
-Sa-Token Session Key 使用框架默认命名。
-
-## 14.3 TTL
-
-- MQ 幂等 Key：课程项目固定 7 天即可；
-- 设备状态：只有实际使用时设置 1-5 分钟；
-- Dashboard：只有实际使用时设置 30-60 秒。
-
-Redis 不保存唯一业务事实。Redis 暂时不可用时，数据库仍是业务事实来源。
-
----
-
-# 15. RocketMQ 事件架构
-
-项目采用 Spring Cloud Alibaba 官方提供的 Spring Cloud Stream RocketMQ Binder。
-
-依赖：
-
-`spring-cloud-starter-stream-rocketmq`
-
-第一版只设计四类高价值 Topic。
-
-## 15.1 通用事件信封
-
-统一事件结构：
-
-```json
-{
-  "eventId": "...",
-  "eventType": "INSPECTION_ABNORMAL_CREATED",
-  "source": "iiop-inspection",
-  "occurredAt": "2026-09-28T16:00:00",
-  "traceId": "...",
-  "data": {}
-}
-```
-
-要求：
-
-- eventId 全局唯一；
-- occurredAt 记录业务事件发生时间；
-- traceId 尽量继承原请求；
-- data 使用明确事件 DTO；
-- 消费者不得依赖生产者数据库。
-
-## 15.2 Topic：iiop.inspection.abnormal
-
-生产者：
-
-iiop-inspection
-
-事件：
-
-`INSPECTION_ABNORMAL_CREATED`
-
-data：
-
-- abnormalId
-- abnormalCode
-- deviceId
-- severity
-- title
-- reportedAt
-
-消费者：
-
-- iiop-maintenance
-- iiop-ai
-
-## 15.3 Topic：iiop.maintenance.alarm
-
-生产者：
-
-iiop-maintenance
-
-事件：
-
-- ALARM_CREATED
-- ALARM_LEVEL_CHANGED
-
-消费者：
-
-- iiop-ai
-- iiop-auth 通知逻辑
-
-## 15.4 Topic：iiop.maintenance.workorder
-
-生产者：
-
-iiop-maintenance
-
-事件：
-
-- WORK_ORDER_CREATED
-- WORK_ORDER_ASSIGNED
-- WORK_ORDER_STATUS_CHANGED
-
-消费者：
-
-iiop-auth 通知逻辑。
-
-第一版 AI 不需要消费所有工单状态事件。
-
-## 15.5 Topic：iiop.ai.diagnosis
-
-生产者：
-
-iiop-ai
-
-事件：
-
-- AI_DIAGNOSIS_SUCCEEDED
-- AI_DIAGNOSIS_FAILED
-- AI_DIAGNOSIS_CONFIRMED
-
-消费者：
-
-- iiop-maintenance：仅处理与 defect/work-order 的 diagnosisId 关联，不同步查询 AI 详情
-- iiop-auth 通知逻辑
-
-## 15.6 Spring Cloud Stream Binding 命名
-
-第一版固定以下函数和 binding 名，避免每个服务自行发明命名。
-
-### inspection
-
-生产绑定：
-
-- binding：`abnormal-out-0`
-- destination：`iiop.inspection.abnormal`
-
-### maintenance
-
-消费函数：
-
-- `inspectionAbnormalConsumer`
-- `aiDiagnosisLinkConsumer`
-
-消费绑定：
-
-- `inspectionAbnormalConsumer-in-0`
-  - destination：`iiop.inspection.abnormal`
-  - group：`iiop-maintenance-abnormal-consumer`
-- `aiDiagnosisLinkConsumer-in-0`
-  - destination：`iiop.ai.diagnosis`
-  - group：`iiop-maintenance-ai-diagnosis-consumer`
-
-`aiDiagnosisLinkConsumer` 只处理 `AI_DIAGNOSIS_SUCCEEDED`。当 triggerType/triggerId 能定位 maintenance 中由同一异常或告警形成的 defect 时，写入 `mt_defect.ai_diagnosis_id`；已有工单时可同步补写 `mt_work_order.ai_diagnosis_id`。它不调用 iiop-ai 查询详情。
-
-生产绑定：
-
-- `alarm-out-0` → `iiop.maintenance.alarm`
-- `workorder-out-0` → `iiop.maintenance.workorder`
-
-### ai
-
-消费函数：
-
-- `aiAbnormalConsumer`
-- `aiAlarmConsumer`
-
-绑定：
-
-- `aiAbnormalConsumer-in-0` → `iiop.inspection.abnormal`
-- `aiAlarmConsumer-in-0` → `iiop.maintenance.alarm`
-
-对应 group 必须不同于 maintenance 和 auth 的 group。
-
-生产绑定：
-
-- `diagnosis-out-0` → `iiop.ai.diagnosis`
-
-### auth
-
-通知消费函数：
-
-- `alarmNotificationConsumer`
-- `workorderNotificationConsumer`
-- `aiNotificationConsumer`
-
-分别消费：
-
-- `alarmNotificationConsumer-in-0`
-  - destination：`iiop.maintenance.alarm`
-  - group：`iiop-auth-alarm-notification-consumer`
-- `workorderNotificationConsumer-in-0`
-  - destination：`iiop.maintenance.workorder`
-  - group：`iiop-auth-workorder-notification-consumer`
-- `aiNotificationConsumer-in-0`
-  - destination：`iiop.ai.diagnosis`
-  - group：`iiop-auth-ai-notification-consumer`
-
-Spring Cloud Stream 使用函数式 Consumer/Function 模式。实际 `spring.cloud.function.definition` 和 bindings 配置按本节名称生成。
-
-## 15.7 Consumer Group
-
-每个业务目的使用独立 Group。
-
-示例：
-
-- `iiop-maintenance-abnormal-consumer`
-- `iiop-maintenance-ai-diagnosis-consumer`
-- `iiop-ai-abnormal-consumer`
-- `iiop-ai-alarm-consumer`
-- `iiop-auth-alarm-notification-consumer`
-- `iiop-auth-workorder-notification-consumer`
-- `iiop-auth-ai-notification-consumer`
-
-不同业务目的不得错误使用同一个 consumer group，否则集群消费会导致只有其中一方获得消息。
-
-## 15.8 幂等
-
-每次消费：
-
-1. 读取 eventId；
-2. 检查 `iiop:event:consumed:{consumer}:{eventId}`；
-3. 已处理则直接成功返回；
-4. 未处理则执行本地事务；
-5. 业务成功后写幂等 Key；
-6. 数据库同时用自然唯一约束兜底。
-
-例如 maintenance 从巡检异常创建 defect 时，数据库规范已有：
-
-`UNIQUE(source_type, source_id)`
-
-用于第二层去重。
-
-## 15.9 发送时机
-
-重要事件只能在本地数据库事务成功后发送。
-
-第一版不引入额外的复杂分布式事务或事件基础设施。
-
-实现原则：
-
-- 本地事务先保证本服务业务正确；
-- MQ 失败时记录错误并允许补偿/重试；
-- 消费端必须幂等；
-- 最终一致性优先于为实训项目引入过重分布式事务框架。
-
----
-
-# 16. Sentinel 设计
-
-Sentinel 只做最小技术展示，不建立复杂流控体系。
-
-## 16.1 依赖
-
-普通服务按实际需要引入：
-
-`spring-cloud-starter-alibaba-sentinel`
-
-Gateway 使用：
-
-`spring-cloud-alibaba-sentinel-gateway`
-
-## 16.2 第一版保护范围
-
-必须完成一个可演示的 Gateway 限流规则。
-
-优先选择：
-
-- `POST /api/auth/login`；或
-- `/api/ai/**`。
-
-其余接口只有真实需要时再增加规则。
-
-## 16.3 返回
-
-被 Sentinel Block 时：
-
-- HTTP 429；
-- 统一业务错误结构；
-- message 明确说明请求过于频繁。
-
-第一版不做：
-
-- 大量接口分别配置规则；
-- 动态规则推送体系；
-- 熔断矩阵；
-- Sentinel 集群流控；
-- 生产级压测参数调优。
-
----
-
-# 17. WebSocket 与通知
-
-## 17.1 所属服务
-
-WebSocket 放在 iiop-auth。
-
-原因：
-
-- sys_notification 属于 iiop_auth；
-- auth 已经维护用户登录态；
-- 不新增 notification 微服务；
-- 第一版只需要简单用户通知推送。
-
-## 17.2 技术方案
-
-使用 Spring 原生 WebSocket：
-
-- `spring-boot-starter-websocket`
-- `TextWebSocketHandler`
-- `HandshakeInterceptor`
-- JSON 文本消息
-
-第一版只使用上述原生 WebSocket 能力，不再叠加额外消息协议或外部 WebSocket Broker。
-
-## 17.3 Gateway 路由
-
-~~~text
-/ws/** → lb:ws://iiop-auth
-~~~
-
-固定握手路径：
-
-~~~text
-/ws/notifications
-~~~
-
-## 17.4 鉴权
-
-浏览器原生 WebSocket 无法设置任意自定义 Header。
-
-第一版连接方式：
-
-~~~text
-ws://gateway/ws/notifications?token=<sa-token-value>
-~~~
-
-HandshakeInterceptor：
-
-1. 读取 token；
-2. 使用 Sa-Token 校验；
-3. 获取 userId；
-4. 把 userId 写入 WebSocketSession attributes；
-5. 校验失败则拒绝握手。
-
-约束：
-
-- token 只用于握手；
-- 服务日志禁止记录完整 WebSocket QueryString；
-- 页面退出登录后立即关闭连接；
-- 后续如果使用 Cookie 模式再受控调整，不在第一版增加复杂认证协议。
-
-## 17.5 连接管理
-
-auth 维护内存中的：
-
-~~~text
-userId → WebSocketSession
-~~~
-
-第一版按单实例 auth 运行即可。
-
-连接关闭时清理 Session。
-
-不引入 Redis Pub/Sub 做 WebSocket 跨实例广播。
-
-## 17.6 消息格式
-
-统一 JSON：
-
-~~~json
-{
-  "type": "WORK_ORDER",
-  "title": "新的维修工单",
-  "content": "WO2026... 已分配给你",
-  "bizType": "WORK_ORDER",
-  "bizId": "1001",
-  "createdAt": "2026-09-28T18:00:00"
-}
-~~~
-
-## 17.7 推送流程
-
-~~~text
-业务/RocketMQ事件
-→ auth 创建 sys_notification
-→ 数据库提交
-→ 如果用户在线，发送 WebSocket JSON
-→ 如果用户离线，只保留数据库记录
-→ 客户端下次登录通过 REST 查询
-~~~
-
-WebSocket 只负责实时提醒，sys_notification 才是通知事实。
-
----
-
-# 18. 请求链路与日志
-
-## 18.1 Request ID
-
-Gateway：
-
-- 如果请求已有合法 `X-Request-Id` 可以透传；
-- 否则生成新的 UUID 或等价唯一 ID。
-
-向下游透传：
-
-`X-Request-Id`
-
-业务服务放入 MDC：
-
-`traceId`
-
-Result 中回传 traceId。
-
-MQ 事件同样带 traceId。
-
-## 18.2 日志要求
-
-日志至少包含：
-
-- timestamp；
-- level；
-- application name；
-- traceId；
-- thread；
-- logger；
-- message。
-
-禁止日志输出：
-
-- 明文密码；
-- Sa-Token 完整 Token；
-- DeepSeek API Key；
-- 数据库密码；
-- 大段完整 AI Prompt 中的敏感内容。
-
-## 18.3 日志等级
-
-开发：
-
-- 项目包 INFO；
-- 调试时局部 DEBUG。
-
-默认禁止整个框架全局 DEBUG。
-
----
-
-# 19. 数据库事务边界
-
-## 19.1 原则
-
-`@Transactional` 只覆盖当前微服务数据库。
-
-禁止用一个本地事务假装包住多个微服务。
-
-## 19.2 典型事务
-
-auth：
-
-- 创建用户 + 用户角色；
-- 修改角色权限；
-- 状态变更。
-
-inspection：
-
-- 生成 task + task items；
-- 提交检查项；
-- 完成任务；
-- 创建异常。
-
-maintenance：
-
-- 创建 defect；
-- 创建工单 + 首条流转日志；
-- 状态迁移 + 流转日志；
-- 提交维修结果；
-- 验收 + 工单状态更新。
-
-ai：
-
-- 创建 diagnosis；
-- 更新诊断结果；
-- 写 workflow trace。
-
-## 19.3 状态更新防重
-
-任务和工单状态更新采用条件更新。
-
-例如：
-
-```text
-UPDATE ...
-WHERE id = ?
-AND status = expectedStatus
-```
-
-更新条数为 0 时返回状态冲突。
-
-第一版不为此额外引入分布式事务。
-
----
-
-# 20. 定时任务
-
-第一版只保留真正必要的后台任务。
-
-## 20.1 巡检计划任务生成
-
-所属：
-
-iiop-inspection
-
-职责：
-
-- 查询 ENABLED 且 next_generate_time 到期的计划；
-- 使用 Redis 短锁 `iiop:lock:inspection-plan:{planId}`；
-- 生成 task；
-- 复制 template items 为 task item 快照；
-- 更新 last_generate_time；
-- 计算 next_generate_time。
-
-要求：
-
-- 同一计划、同一调度时间不得重复生成任务；
-- 生成过程在 inspection 本地事务中完成；
-- Redis 锁只是并发保护，数据库查询仍需防重复。
-
-## 20.2 逾期任务
-
-周期扫描未完成且超过 scheduled_end_time 的任务：
-
-- 设置 `overdue_flag = 1`；
-- 不改变 task_status 的 PENDING / IN_PROGRESS 生命周期语义。
-
----
-
-# 21. API 设计总则
-
-## 21.1 URL
-
-外部：
-
-`/api/{domain}/...`
-
-内部：
-
-`/internal/{domain}/...`
-
-URL 使用复数资源名。
-
-动作型状态迁移可以使用子资源/动作，例如：
-
-`POST /api/inspection/tasks/{id}/start`
-
-## 21.2 HTTP 方法
-
-- GET：查询；
-- POST：创建或明确业务动作；
-- PUT：完整或明确更新；
-- DELETE：删除可删除的主数据。
-
-禁止所有业务都使用 POST。
-
-## 21.3 参数
-
-- DTO 使用 Bean Validation；
-- Path ID 使用 Long；
-- 分页 pageNum/pageSize；
-- 时间使用 ISO-8601；
-- 状态从枚举集合校验。
-
-## 21.4 返回
-
-Controller 返回：
-
-`Result<VO>`
-
-分页：
-
-`Result<PageResult<VO>>`
-
-DELETE 成功返回空 data 或 Boolean，整个项目保持统一。
-
-## 21.5 外部 ID 序列化契约
-
-数据库 Entity 和 Service 内部 ID 使用 `Long`。
-
-面向 PC/HarmonyOS 的外部 Request/VO 中，所有业务 ID 字段按字符串契约处理，避免 JavaScript Number 超出安全整数范围。
-
-规则：
-
-1. Entity 的 id、deviceId 等仍为 Long；
-2. 外部 VO 的 id、deviceId、taskId、workOrderId、diagnosisId 等使用 String，或在字段级显式使用 ToStringSerializer；
-3. 禁止配置“所有 Long 全局转字符串”，避免把分页 total、耗时等普通 Long 数值意外转换；
-4. 前端禁止 parseInt 业务 ID；
-5. 内部 Feign DTO 可以继续使用 Long，因为调用双方均为 Java 服务；
-6. PageResult.total 保持数值语义。
-
-## 21.6 附件上传与本地存储契约
-
-第一版不新增文件微服务。文件物理根目录固定：
-
-`E:/IIOP-data/uploads/`
-
-业务服务只处理自己领域的附件。
-
-### inspection
-
-上传：
-
-`POST /api/inspection/attachments/images`
-
-权限：
-
-- inspection:execute 或 inspection:abnormal:process
-
-请求：
-
-`multipart/form-data`，字段名 `file`。
-
-读取：
-
-`GET /api/inspection/attachments/{fileKey}`
-
-读取至少要求登录，并结合 inspection:view / inspection:execute 做领域授权。
-
-用途：
-
-- PHOTO 巡检项；
-- ins_task_item.evidence_urls；
-- ins_abnormal.evidence_urls。
-
-### maintenance
-
-上传：
-
-`POST /api/maintenance/attachments/images`
-
-权限：
-
-- maintenance:workorder:process
-
-读取：
-
-`GET /api/maintenance/attachments/{fileKey}`
-
-读取至少要求 maintenance:view。
-
-用途：
-
-- 工单处理图片；
-- mt_work_order_log.attachments。
-
-### AttachmentVO
-
-返回至少：
-
-- fileKey
-- originalName
-- contentType
-- size
-- url
-
-其中 url 为经过 Gateway 的业务 URL，例如 `/api/inspection/attachments/{fileKey}`。
-
-安全规则：
-
-1. 只允许 image/jpeg、image/png、image/webp；
-2. 单文件上限第一版为 10 MiB；
-3. 服务端生成 UUID 或等价不可预测文件名；
-4. 禁止使用用户原始文件名作为物理路径；
-5. 必须规范化并校验目录，阻止路径穿越；
-6. 文件存放在 `E:/IIOP-data/uploads/inspection/` 或 `maintenance/`；
-7. GET 仍要求正常 Sa-Token 登录和 Same-Token 网关链路；
-8. 前端需要显示图片时，通过带 Token 的请求读取 Blob/字节，不假设匿名静态资源；
-9. 业务 JSON 只保存返回 URL，不保存 base64 或二进制；
-10. 第一版不提供物理删除 API，用户在业务提交前先完成本地选择，确认提交时再上传，尽量减少孤儿文件；
-11. 项目运行目录和上传目录不得进入 Git；
-12. 附件 GET 返回二进制响应，是统一 Result<VO> JSON 契约的明确例外；错误响应仍使用统一业务错误结构。
-
-iiop-common 可以提供纯 Java 的安全文件名、路径规范化、MIME/大小校验和本地存储抽象；业务 Controller、业务权限和目录配置保留在 inspection/maintenance 服务。
-
----
-
-# 22. iiop-auth API
-
-## 22.1 登录
-
-### POST /api/auth/login
-
-公开。
-
-请求：
-
-- username
-- password
-
-返回：
-
-- tokenName
-- tokenValue
-- user summary
-- roles
-- permissions
-
-失败场景：
-
-- 用户不存在；
-- 密码错误；
-- 用户禁用；
-- 用户锁定。
-
-禁止向外部返回能够精确判断账号是否存在的差异化提示，降低账号枚举风险。
-
-## 22.2 退出
-
-### POST /api/auth/logout
-
-已登录。
-
-调用 Sa-Token logout。
-
-## 22.3 当前用户
-
-### GET /api/auth/me
-
-返回：
-
-- 用户资料；
-- roles；
-- permissions。
-
-## 22.4 用户管理
-
-- GET /api/auth/users
-- GET /api/auth/users/{id}
-- POST /api/auth/users
-- PUT /api/auth/users/{id}
-- PUT /api/auth/users/{id}/status
-- PUT /api/auth/users/{id}/roles
-- DELETE /api/auth/users/{id}
-
-权限建议：
-
-- system:user:view
-- system:user:create
-- system:user:update
-- system:user:delete
-- system:user:role
-
-创建用户时密码必须 BCrypt。
-
-删除采用数据库规范中的逻辑删除。
-
-## 22.5 角色
-
-- GET /api/auth/roles
-- GET /api/auth/roles/{id}
-- POST /api/auth/roles
-- PUT /api/auth/roles/{id}
-- DELETE /api/auth/roles/{id}
-- PUT /api/auth/roles/{id}/permissions
-
-权限：
-
-- system:role:view
-- system:role:create
-- system:role:update
-- system:role:delete
-- system:role:permission
-
-## 22.6 权限
-
-- GET /api/auth/permissions/tree → system:permission:view
-- GET /api/auth/permissions → system:permission:view
-- POST /api/auth/permissions → system:permission:create
-- PUT /api/auth/permissions/{id} → system:permission:update
-- DELETE /api/auth/permissions/{id} → system:permission:delete
-
-## 22.7 通知
-
-- GET /api/auth/notifications
-- GET /api/auth/notifications/unread-count
-- PUT /api/auth/notifications/{id}/read
-- PUT /api/auth/notifications/read-all
-
-用户只能修改自己的通知状态。
-
-## 22.8 内部用户摘要
-
-### GET /internal/auth/users/{id}/summary
-
-仅 Same-Token。
-
-返回：
-
-- id
-- username
-- realName
-- status
-
----
-
-# 23. iiop-device API
-
-## 23.1 分类
-
-- GET /api/device/categories/tree
-- GET /api/device/categories
-- POST /api/device/categories
-- PUT /api/device/categories/{id}
-- DELETE /api/device/categories/{id}
-
-## 23.2 设备
-
-- GET /api/device/devices
-- GET /api/device/devices/{id}
-- POST /api/device/devices
-- PUT /api/device/devices/{id}
-- PUT /api/device/devices/{id}/status
-- DELETE /api/device/devices/{id}
-
-筛选：
-
-- keyword
-- categoryId
-- status
-- riskLevel
-- workshop
-- productionLine
-
-## 23.3 指标定义
-
-- GET /api/device/devices/{deviceId}/metrics
-- POST /api/device/devices/{deviceId}/metrics
-- PUT /api/device/metrics/{id}
-- DELETE /api/device/metrics/{id}
-
-## 23.4 指标数据
-
-- GET /api/device/devices/{deviceId}/metric-data
-- POST /api/device/metric-data
-
-查询参数：
-
-- metricId
-- startTime
-- endTime
-- pageNum
-- pageSize
-
-后续 ECharts 趋势使用：
-
-### GET /api/device/devices/{deviceId}/metric-trend
-
-返回适合图表的数据 DTO，不返回 Entity。
-
-实时监测和设备摘要使用：
-
-### GET /api/device/devices/{deviceId}/metric-snapshot
-
-一次返回该设备各启用指标的最新值、单位、采集时间和阈值摘要，避免前端按指标逐个轮询。
-
-## 23.5 SOP
-
-- GET /api/device/sops
-- GET /api/device/sops/{id}
-- POST /api/device/sops
-- PUT /api/device/sops/{id}
-- DELETE /api/device/sops/{id}
-
-## 23.6 统计
-
-- GET /api/device/statistics/overview
-- GET /api/device/statistics/status-distribution
-- GET /api/device/statistics/risk-distribution
-
-## 23.7 内部设备上下文
-
-### GET /internal/device/devices/{id}/context
-
-面向 inspection、maintenance、ai。
-
-AI 使用两个明确的只读内部契约：
-
-### GET /internal/device/devices/{id}/ai-context
-
-包含：
-
-- device summary；
-- 当前或近期关键指标摘要。
-
-### GET /internal/device/devices/{id}/sop-context
-
-只返回与该设备相关且状态为 EFFECTIVE 的 SOP 摘要/受控内容，优先设备专属，再按设备分类匹配。
-
-这两个接口由 LangGraph4j 的 LOAD_CONTEXT 节点统一调用，数据来源保持清晰可审计。
-
-禁止让 AI 服务直接查 iiop_device。
-
----
-
-# 24. iiop-inspection API
-
-## 24.1 模板
-
-- GET /api/inspection/templates
-- GET /api/inspection/templates/{id}
-- POST /api/inspection/templates
-- PUT /api/inspection/templates/{id}
-- DELETE /api/inspection/templates/{id}
-- PUT /api/inspection/templates/{id}/flow
-
-flow 保存 Vue Flow JSON。
-
-## 24.2 模板项
-
-- GET /api/inspection/templates/{templateId}/items
-- POST /api/inspection/templates/{templateId}/items
-- PUT /api/inspection/template-items/{id}
-- DELETE /api/inspection/template-items/{id}
-- PUT /api/inspection/templates/{templateId}/items/sort
-
-## 24.3 计划
-
-- GET /api/inspection/plans
-- GET /api/inspection/plans/{id}
-- POST /api/inspection/plans
-- PUT /api/inspection/plans/{id}
-- PUT /api/inspection/plans/{id}/status
-- DELETE /api/inspection/plans/{id}
-
-创建或启用计划时校验：
-
-- device 存在；
-- template 可用；
-- assignee 用户可用。
-
-## 24.4 任务
-
-- GET /api/inspection/tasks
-- GET /api/inspection/tasks/{id}
-- POST /api/inspection/tasks/manual
-- POST /api/inspection/tasks/{id}/start
-- POST /api/inspection/tasks/{id}/items/{itemId}/submit
-- POST /api/inspection/tasks/{id}/complete
-- POST /api/inspection/tasks/{id}/cancel
-
-列表筛选：
-
-- deviceId
-- assigneeUserId
-- taskStatus
-- resultStatus
-- overdue
-- startDate
-- endDate
-
-`GET /api/inspection/abnormals` 至少支持：
-
-- deviceId
-- severity
-- status
-- startDate
-- endDate
-
-INSPECTOR 默认只能执行分配给自己的任务，管理员可查看全部。
-
-## 24.5 异常
-
-- GET /api/inspection/abnormals
-- GET /api/inspection/abnormals/{id}
-- POST /api/inspection/tasks/{taskId}/abnormals
-- PUT /api/inspection/abnormals/{id}/status
-
-## 24.6 统计
-
-- GET /api/inspection/statistics/overview
-- GET /api/inspection/statistics/trend
-
-## 24.7 内部历史
-
-### GET /internal/inspection/devices/{deviceId}/recent-history
-
-供 AI 使用。
-
-返回最近若干：
-
-- task summary；
-- abnormal summary；
-- task item 异常结果。
-
-不得返回无限历史数据。
-
----
-
-# 25. iiop-maintenance API
-
-## 25.1 告警
-
-`GET /api/maintenance/alarms` 至少支持 deviceId、alarmLevel、status、startTime、endTime、pageNum、pageSize。
-
-- GET /api/maintenance/alarms
-- GET /api/maintenance/alarms/{id}
-- POST /api/maintenance/alarms/manual
-- POST /api/maintenance/alarms/{id}/acknowledge
-- POST /api/maintenance/alarms/{id}/recover
-- POST /api/maintenance/alarms/{id}/close
-
-## 25.2 缺陷
-
-`GET /api/maintenance/defects` 至少支持 deviceId、severity、status、sourceType、pageNum、pageSize。
-
-- GET /api/maintenance/defects
-- GET /api/maintenance/defects/{id}
-- POST /api/maintenance/defects/manual
-- POST /api/maintenance/defects/{id}/confirm
-- POST /api/maintenance/defects/{id}/resolve
-- POST /api/maintenance/defects/{id}/close
-
-## 25.3 工单
-
-`GET /api/maintenance/work-orders` 至少支持 keyword、deviceId、priority、status、assigneeUserId、startTime、endTime、pageNum、pageSize。
-
-- GET /api/maintenance/work-orders
-- GET /api/maintenance/work-orders/{id}
-- POST /api/maintenance/work-orders
-- PUT /api/maintenance/work-orders/{id}
-- POST /api/maintenance/work-orders/{id}/submit
-- POST /api/maintenance/work-orders/{id}/assign
-- POST /api/maintenance/work-orders/{id}/start
-- POST /api/maintenance/work-orders/{id}/repair
-- POST /api/maintenance/work-orders/{id}/submit-acceptance
-- POST /api/maintenance/work-orders/{id}/accept
-- POST /api/maintenance/work-orders/{id}/reject
-- POST /api/maintenance/work-orders/{id}/cancel
-- GET /api/maintenance/work-orders/{id}/logs
-
-每个动作严格校验 `01-database.md` 状态机。
-
-从 defect 创建工单时，如果 defect 已通过 AI_DIAGNOSIS_SUCCEEDED 事件关联 `ai_diagnosis_id`，工单默认继承该 diagnosisId。maintenance 只保存引用，不同步读取 AI 详情。
-
-## 25.4 统计
-
-- GET /api/maintenance/statistics/overview
-- GET /api/maintenance/statistics/alarm-trend
-- GET /api/maintenance/statistics/work-order-distribution
-
-## 25.5 内部维修历史
-
-### GET /internal/maintenance/devices/{deviceId}/history
-
-供 AI 使用。
-
-返回：
-
-- 近期告警；
-- 近期缺陷；
-- 已完成维修记录；
-- 验收摘要。
-
-限制条数，避免一次把全部历史传给大模型。
-
----
-
-# 26. iiop-ai API
-
-AI 只提供诊断能力，具体行为以 04-ai.md 为准。
-
-### POST /api/ai/diagnoses
-
-权限：ai:diagnosis
-
-MANUAL 请求至少包含：
-
-- deviceId
-- abnormalSummary
-- description，可选，对应 ai_diagnosis.user_description
-
-### GET /api/ai/diagnoses
-
-权限：ai:view
-
-支持：
-
-- deviceId
-- triggerType
-- riskLevel
-- diagnosisStatus
-- confirmationStatus
-- pageNum
-- pageSize
-
-### GET /api/ai/diagnoses/{id}
-
-权限：ai:view
-
-### GET /api/ai/diagnoses/{id}/workflow
-
-权限：ai:view
-
-### POST /api/ai/diagnoses/{id}/confirm
-
-权限：ai:confirm
-
-### POST /api/ai/diagnoses/{id}/reject
-
-权限：ai:confirm
-
-AI 服务只提供上述诊断 API。
-
----
-
-# 27. Dashboard 数据聚合
-
-不新增 dashboard 微服务。
-
-PC 首页分别调用：
-
-- device statistics；
-- inspection statistics；
-- maintenance statistics。
-
-前端并行请求后组合展示。
-
-原因：
-
-- 项目规模有限；
-- 避免新增只为大屏服务的微服务；
-- 统计数据天然属于各自业务域。
-
-Redis 对各服务统计结果做短缓存。
-
----
-
-# 28. 初始管理员创建方案
-
-`06_seed_data.sql` 不保存用户密码。
-
-为了让项目第一次启动后可登录，auth 提供 **仅开发环境启用** 的 Bootstrap Admin 初始化逻辑。
-
-环境变量：
-
-- `IIOP_BOOTSTRAP_ADMIN_ENABLED`
-- `IIOP_BOOTSTRAP_ADMIN_USERNAME`
-- `IIOP_BOOTSTRAP_ADMIN_PASSWORD`
-
-规则：
-
-1. 仅 `dev` profile 可启用；
-2. enabled != true 时完全不执行；
-3. 密码必须通过 BCrypt 后入库；
-4. 若 username 已存在则不重复创建；
-5. 自动绑定 SUPER_ADMIN；
-6. 不把密码写日志；
-7. README 只写变量名，不写真实默认密码；
-8. 完成首次初始化后建议关闭开关。
-
----
-
-# 29. 测试策略
-
-## 29.1 单元测试
-
-重点测试：
-
-- 状态机；
-- 业务编码生成；
-- 权限判断；
-- DTO 校验；
-- AI 结构化结果解析；
-- MQ 幂等逻辑。
-
-## 29.2 Service 测试
-
-重点：
-
-- 创建任务时模板快照；
-- 异常创建；
-- defect 幂等；
-- 工单状态迁移；
-- 验收驳回；
-- AI 人工确认。
-
-## 29.3 Controller/API 测试
-
-至少验证：
-
-- 正常请求；
-- 参数错误；
-- 未登录；
-- 无权限；
-- 对象不存在；
-- 状态冲突。
-
-## 29.4 集成测试
-
-后期真实基础设施启动后验证：
-
-- Nacos 注册；
-- Gateway lb 路由；
-- Redis Session；
-- Same-Token；
-- Feign；
-- RocketMQ；
-- Sentinel；
-- WebSocket。
-
-不得通过删除失败测试来让构建通过。
-
----
-
-# 30. 分阶段后端实施顺序
-
-后端实际编码不得一次生成全部服务。
-
-## B1：公共基础
-
-实现：
-
-- iiop-common；
-- parent POM 依赖管理；
-- Result；
-- PageResult；
-- 错误码；
-- BizException。
-
-## B2：auth
-
-实现：
-
-- Entity；
-- Mapper；
-- RBAC Service；
-- 登录；
-- Sa-Token；
-- Bootstrap Admin；
-- 通知 REST；
-- 原生 WebSocket。
-
-## B3：gateway
-
-实现：
-
-- WebFlux Gateway；
-- Nacos；
-- 显式 routes；
-- Sa-Token Reactor；
-- Same-Token；
-- CORS；
-- traceId；
-- Sentinel 基础接入。
-
-此时必须完成第一条真正可运行链：
-
-`客户端 → 8080 Gateway → 9201 auth`
-
-## B4：device
-
-实现完整设备域和内部 context API。
-
-## B5：inspection
-
-实现模板、计划、任务、执行、异常和异常 MQ。
-
-## B6：maintenance
-
-实现告警、缺陷、工单、维修、验收和 MQ。
-
-## B7：AI
-
-按照 `04-ai.md` 实现。
-
-## B8：基础设施完善
-
-集中完成：
-
-- Sentinel 实际规则；
-- Redis 缓存；
-- MQ 幂等；
-- Feign timeout/fallback；
-- WebSocket 联调；
-- Dashboard 缓存。
-
----
-
-# 31. 每阶段构建规则
-
-第一次真正允许 Maven 下载依赖前，Codex 必须先确认：
-
-`.mvn/maven.config`
-
-仍然包含：
-
-`-Dmaven.repo.local=E:/DevCache/maven/repository`
-
-然后执行 Maven 时从：
-
-`E:\IIOP`
-
-使用：
-
-`mvn -f backend/pom.xml ...`
-
-所有 Maven 依赖必须进入：
-
-`E:/DevCache/maven/repository`
-
-不得修改 Maven repo 指向 C 盘。
-
-开发阶段推荐优先执行最小模块构建，例如：
-
-`mvn -f backend/pom.xml -pl iiop-common -am test`
-
-而不是每次全量 clean install。
-
-只有需要验证聚合工程时才运行全量构建。
-
----
-
-# 32. 代码质量规则
-
-后端必须遵守：
-
-1. Controller 不写复杂业务；
-2. Service 不直接拼 HTTP response；
-3. Mapper 不跨库；
-4. Entity 不出服务边界；
-5. DTO/VO 命名表达用途；
-6. 不使用 Map 代替稳定业务 DTO；
-7. 禁止大段复制粘贴 Controller；
-8. 禁止在 Service 中硬编码 API Key；
-9. 禁止在代码中写数据库密码；
-10. 关键状态变化必须校验前置状态；
-11. MQ 消费必须幂等；
-12. Feign 失败不能被吞掉；
-13. AI 失败不能伪装成功；
-14. 日志不得泄密；
-15. 业务异常要有可定位的 traceId；
-16. 不为了技术栈齐全创建无用途类。
-
----
-
-# 33. 后端验收链路
-
-项目最终至少必须演示以下链路。
-
-## 33.1 登录链
-
-```text
-POST /api/auth/login
-→ Gateway
-→ Auth
-→ MySQL 用户
-→ BCrypt
-→ Sa-Token
-→ Redis Session
-→ 返回 Token
-```
-
-## 33.2 设备链
-
-```text
-Gateway
-→ Device
-→ MyBatis-Plus
-→ iiop_device
-→ Redis 短缓存
-→ PC 设备页面
-```
-
-## 33.3 巡检链
-
-```text
-计划
-→ 定时生成任务
-→ HarmonyOS 执行
-→ 任务项
-→ 异常
-→ RocketMQ
-```
-
-## 33.4 维护链
-
-```text
-异常事件
-→ Maintenance Consumer
-→ Defect
-→ Work Order
-→ Assign
-→ Repair
-→ Acceptance
-→ Completed
-```
-
-## 33.5 AI 链
-
-```text
-异常/告警事件
-→ AI Consumer
-→ LangGraph4j 5 节点
-→ OpenFeign 获取上下文
-→ LangChain4j
-→ DeepSeek
-→ ai_diagnosis
-→ 人工确认
-```
-
-## 33.6 通知链
-
-```text
-业务/MQ事件
-→ Auth Notification
-→ sys_notification
-→ WebSocket
-→ PC/HarmonyOS
-```
-
-这些链路能够跑通，才说明项目确实使用了微服务、中间件和大模型，而不只是 POM 中声明了依赖。
-
----
-
-# 34. M2 开始前的约束
-
-在数据库 M1 完成并审查通过前，不进入大规模后端业务生成。
-
-M2 或后续后端任务中，Codex 每次只能实现明确阶段。
-
-Codex 如果发现：
-
-- BOM 解析失败；
-- 依赖 artifact 不存在；
-- Spring Cloud Gateway 新旧配置前缀冲突；
-- Sa-Token Boot3 starter 不兼容；
-- Nacos 配置无法加载；
-- Sentinel Gateway 与新 Gateway starter 存在兼容问题；
-
-必须报告真实错误。
-
-禁止通过：
-
-- 随意降级 Spring Boot；
-- 随意升级 Spring Cloud；
-- 改回过时 starter；
-- 删除目标技术；
-
-来隐藏兼容问题。
-
----
-
-# 35. 官方实现依据
-
-本文档中的版本和关键集成方式基于以下官方资料核对：
-
-1. Spring Cloud 2025.0.0 Release Train，确认 Boot 3.5.0、Gateway 4.3.0、OpenFeign 4.3.0；
-2. Spring Cloud 2025.0 Release Notes，确认 Gateway 4.3 的新 starter 名称与新配置前缀；
-3. Spring Cloud Gateway 4.3 Reference，确认 WebFlux starter、LoadBalancer 和 WebSocket 路由；
-4. Spring Cloud Alibaba 2025.x 版本说明，确认 Nacos 3.0.3、Sentinel 1.8.9、RocketMQ 5.3.1；
-5. Spring Cloud Alibaba Nacos 2025.x 文档，确认 `spring.config.import`；
-6. Spring Cloud Alibaba RocketMQ 2025.x 文档，确认 `spring-cloud-starter-stream-rocketmq`；
-7. Sa-Token 1.46 官方文档，确认 Spring Boot 3 MVC/Reactor starter、Redis 分布式会话和 Same-Token 微服务方案；
-8. MyBatis-Plus 官方文档，确认 Spring Boot 3 starter 与 3.5.17；
-9. Spring Framework WebSocket 文档，确认原生 WebSocket Handler 与握手拦截能力。
-
----
-
-# 36. 当前结论
-
-后端第一版架构固定为：
-
-```text
-PC / HarmonyOS
-        ↓
-iiop-gateway :8080
-        ↓
-Sa-Token + Sentinel + Same-Token
-        ↓
-┌────────────┬─────────────┬─────────────────┬──────────────────┬───────────┐
-│ iiop-auth  │ iiop-device │ iiop-inspection │ iiop-maintenance │ iiop-ai   │
-│ :9201      │ :9202       │ :9203           │ :9204            │ :9205     │
-└────────────┴─────────────┴─────────────────┴──────────────────┴───────────┘
-      ↓              ↓              ↓                  ↓              ↓
- iiop_auth      iiop_device   iiop_inspection    iiop_maintenance   iiop_ai
-
-共享基础设施：
-Nacos + Redis + RocketMQ + Sentinel
-
-同步跨服务：
-OpenFeign + Same-Token
-
-异步跨服务：
-RocketMQ
-
-实时客户端通知：
-iiop-auth + 原生 WebSocket
-
-AI：
-iiop-ai + LangChain4j + LangGraph4j + DeepSeek
-```
-
-该方案控制实训项目复杂度，同时真实体现微服务注册发现、网关、认证授权、缓存、消息队列、流量保护、服务调用、实时通信和大模型工作流。
-
-未经明确确认，Codex 不得重新拆分服务或引入新的基础设施组件。
+业务 ID 对 PC/HarmonyOS 返回字符串。
+
+## 17. 后端第一版 PASS
+
+满足以下即可：
+
+1. 6 个服务可以启动并注册
+2. Gateway 可以路由
+3. 登录/RBAC 可用
+4. device 主 CRUD 可用
+5. inspection 能执行任务并创建异常
+6. RocketMQ 能把异常送到 maintenance
+7. maintenance 能完成工单和验收
+8. AI 能通过 Feign 获取上下文
+9. WebSocket 能收到一条真实通知
+10. Sentinel 能演示一次限流
+11. Maven build/test 通过
+12. Git 无 Secret
+
+不因为未实现生产级治理能力阻塞 PASS。
