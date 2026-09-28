@@ -14,7 +14,7 @@
 
 Codex 在 M1 阶段生成 SQL，以及后续生成 Entity、Mapper、Service、DTO 时，必须以本文档为数据库事实来源。不得根据页面方便程度临时增加重复字段，也不得为了减少代码量破坏微服务数据边界。
 
-本文档当前规划 **5 个逻辑数据库、27 张业务表**。
+本文档当前规划 **5 个逻辑数据库、25 张业务表**。
 
 ---
 
@@ -1229,81 +1229,18 @@ WAITING_ACCEPTANCE → PROCESSING
 
 # 8. iiop_ai 数据库
 
-共 4 张表：
+共 2 张表：
 
-1. ai_session
-2. ai_message
-3. ai_diagnosis
-4. ai_workflow_trace
+1. ai_diagnosis
+2. ai_workflow_trace
 
 ---
 
-## 8.1 ai_session AI 会话表
-
-字段：
-
-- id BIGINT
-- session_code VARCHAR(64)
-- user_id BIGINT
-- device_id BIGINT NULL
-- title VARCHAR(128) NULL
-- status VARCHAR(32)
-- created_at DATETIME
-- updated_at DATETIME
-
-`status`：
-
-- ACTIVE
-- CLOSED
-
-约束：
-
-- UNIQUE(session_code)
-- INDEX(user_id, updated_at)
-- INDEX(device_id, updated_at)
-
----
-
-## 8.2 ai_message AI 消息表
-
-字段：
-
-- id BIGINT
-- session_id BIGINT
-- role VARCHAR(32)
-- content LONGTEXT
-- model_name VARCHAR(128) NULL
-- token_usage JSON NULL
-- created_at DATETIME
-
-`role`：
-
-- SYSTEM
-- USER
-- ASSISTANT
-- TOOL
-
-索引：
-
-- INDEX(session_id, created_at)
-
-`token_usage` 可保存：
-
-```json
-{
-  "inputTokens": 100,
-  "outputTokens": 200,
-  "totalTokens": 300
-}
-```
-
----
-
-## 8.3 ai_diagnosis AI 诊断表
+## 8.1 ai_diagnosis AI 诊断表
 
 ### 业务目的
 
-保存每次 DeepSeek 辅助诊断的输入上下文摘要、结构化结果、运行状态和人工确认状态。
+保存 DeepSeek 辅助诊断的触发来源、输入快照、结构化结果、模型信息、运行状态和人工确认状态。
 
 字段：
 
@@ -1367,17 +1304,17 @@ WAITING_ACCEPTANCE → PROCESSING
 
 业务规则：
 
-- DeepSeek 调用成功且结构化结果校验通过后，才能标记 SUCCEEDED；
-- 调用失败或 JSON 校验失败标记 FAILED；
+- MANUAL 诊断的 trigger_id 为 NULL；MySQL 唯一索引允许多条 NULL，因此可以重复发起人工诊断；
+- INSPECTION_ABNORMAL 和 ALARM 的 trigger_type + trigger_id 唯一，作为事件幂等的数据库兜底；
+- DeepSeek 调用成功且结构化结果校验通过后才能标记 SUCCEEDED；
+- 调用失败或结构化结果校验失败标记 FAILED；
 - AI 输出不能直接改变设备控制状态；
 - 只有人工操作才能将 confirmation_status 改为 CONFIRMED/REJECTED；
-- context_snapshot 用于保存当次诊断使用的必要上下文快照，便于追溯；
-- MANUAL 诊断的 trigger_id 为 NULL。MySQL 唯一索引允许多条 NULL，因此可以重复发起人工诊断；
-- INSPECTION_ABNORMAL 和 ALARM 的 trigger_type + trigger_id 唯一，作为事件幂等的数据库兜底。
+- context_snapshot 保存本次诊断实际使用的关键上下文，便于追溯。
 
 ---
 
-## 8.4 ai_workflow_trace AI 工作流轨迹表
+## 8.2 ai_workflow_trace AI 工作流轨迹表
 
 字段：
 
@@ -1401,23 +1338,20 @@ WAITING_ACCEPTANCE → PROCESSING
 - FAILED
 - SKIPPED
 
-第一版节点：
+第一版固定 5 个节点：
 
-1. LOAD_DEVICE
-2. LOAD_INSPECTION_HISTORY
-3. LOAD_MAINTENANCE_HISTORY
-4. LOAD_SOP
-5. ANALYZE_WITH_DEEPSEEK
-6. RISK_CHECK
-7. GENERATE_ADVICE
-8. PREPARE_WORK_ORDER_DRAFT
+1. LOAD_CONTEXT
+2. ANALYZE_WITH_DEEPSEEK
+3. RISK_CHECK
+4. GENERATE_ADVICE
+5. PREPARE_WORK_ORDER_DRAFT
 
 索引：
 
 - INDEX(diagnosis_id, created_at)
 - INDEX(diagnosis_id, node_code)
 
-允许同一 node_code 在重试时产生多条 trace，不能用唯一约束限制。
+允许同一 node_code 在故障重试或人工重新发起的新诊断中产生新的 trace；单次 diagnosis 的节点按工作流实际执行情况记录。
 
 ---
 
@@ -1673,7 +1607,6 @@ M1 固定插入以下权限编码。后端注解、PC 路由和按钮、HarmonyO
 - ai:view
 - ai:diagnosis
 - ai:confirm
-- ai:chat
 
 ### 系统管理
 
@@ -1711,7 +1644,6 @@ INSPECTOR：
 - inspection:execute
 - ai:view
 - ai:diagnosis
-- ai:chat
 
 MAINTAINER：
 
@@ -1725,7 +1657,6 @@ MAINTAINER：
 - ai:view
 - ai:diagnosis
 - ai:confirm
-- ai:chat
 
 06_seed_data.sql 应同时插入角色、权限以及上述角色权限关系。SUPER_ADMIN 的全部权限关系必须来自 sys_role_permission，不通过“角色名硬编码绕过 RBAC”。
 
@@ -1849,7 +1780,7 @@ USE iiop_maintenance;
 
 USE iiop_ai;
 
-创建 ai 的 4 张表。
+创建 ai 的 2 张表。
 
 ### 06_seed_data.sql
 
@@ -1882,7 +1813,7 @@ Codex 完成 M1 后，必须静态检查以下内容。
 ### 17.1 数量
 
 - 5 个逻辑数据库；
-- 27 张业务表；
+- 25 张业务表；
 - 不多建临时业务表；
 - 不漏表。
 
@@ -1945,7 +1876,7 @@ M1 只实现数据库 SQL。
 - 运行数据库迁移；
 - 自行增加数据库；
 - 自行增加微服务；
-- 自行改变 27 张表的范围。
+- 自行改变 25 张表的范围。
 
 如果发现本文档存在无法实现或明显冲突的地方，Codex 应停止并报告，不应自行修改架构。
 
@@ -1974,9 +1905,9 @@ M1 阶段数据库范围已经固定为：
 - iiop_device：5 表；
 - iiop_inspection：6 表；
 - iiop_maintenance：6 表；
-- iiop_ai：4 表；
+- iiop_ai：2 表；
 
-合计 **27 张业务表**。
+合计 **25 张业务表**。
 
 这个模型足以支撑：
 
