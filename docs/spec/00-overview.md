@@ -651,7 +651,6 @@ iiop-common 为普通 Jar，不启动。
 | ai | device | 获取设备、监测指标、SOP |
 | ai | inspection | 获取近期巡检和异常历史 |
 | ai | maintenance | 获取维修历史 |
-| maintenance | ai | 查询已生成的 AI 诊断结果 |
 
 调用规则：
 
@@ -659,7 +658,8 @@ iiop-common 为普通 Jar，不启动。
 2. 同步调用只获取当前业务操作真正需要的数据；
 3. Feign DTO 与数据库 Entity 分离；
 4. 调用失败需要明确超时和降级行为；
-5. 禁止形成同步循环调用。
+5. 禁止形成同步循环调用；
+6. maintenance 不同步调用 ai，AI 诊断完成通过 RocketMQ 事件传递 diagnosisId，客户端需要完整诊断详情时直接访问 iiop-ai。
 
 ---
 
