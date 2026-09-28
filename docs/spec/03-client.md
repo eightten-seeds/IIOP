@@ -1590,7 +1590,7 @@ GET /api/ai/diagnoses/{id}
 
 ---
 
-# 34. 角色管理
+# 35. 角色管理
 
 路由：
 
@@ -1612,7 +1612,7 @@ GET /api/ai/diagnoses/{id}
 
 ---
 
-# 34. 权限管理
+# 36. 权限管理
 
 路由：
 
@@ -1635,7 +1635,7 @@ GET /api/ai/diagnoses/{id}
 
 ---
 
-# 34. 通知中心
+# 37. 通知中心
 
 顶部 Header：
 
@@ -1667,7 +1667,7 @@ REST：
 
 ---
 
-# 34. PC WebSocket/原生 WebSocket
+# 38. PC 原生 WebSocket
 
 后端约定：
 
@@ -1698,7 +1698,7 @@ PC 初始化时：
 
 ---
 
-# 34. PC Loading、Empty 与 Error 状态
+# 39. PC Loading、Empty 与 Error 状态
 
 每个异步页面必须明确三类状态：
 
@@ -1730,7 +1730,7 @@ PC 初始化时：
 
 ---
 
-# 34. PC 表格与表单统一规范
+# 40. PC 表格与表单统一规范
 
 表格：
 
@@ -1753,9 +1753,9 @@ PC 初始化时：
 
 ---
 
-# 34. PC ID 与时间处理
+# 41. PC ID 与时间处理
 
-## 34.1 Long ID
+## 41.1 Long ID
 
 Java ASSIGN_ID 可能超过 JavaScript 安全整数范围。
 
@@ -1767,7 +1767,7 @@ Java ASSIGN_ID 可能超过 JavaScript 安全整数范围。
 4. 禁止 parseInt 后再保存；
 5. total、durationMs、count 等普通统计数值仍使用 number。
 
-## 34.2 时间
+## 41.2 时间
 
 后端使用 ISO-8601 或项目统一时间字符串。
 
@@ -1777,7 +1777,7 @@ Java ASSIGN_ID 可能超过 JavaScript 安全整数范围。
 
 ---
 
-# 34. PC 响应式范围
+# 42. PC 响应式范围
 
 目标设备：
 
@@ -1800,7 +1800,7 @@ Java ASSIGN_ID 可能超过 JavaScript 安全整数范围。
 
 ---
 
-# 34. HarmonyOS 产品定位
+# 43. HarmonyOS 产品定位
 
 HarmonyOS 端服务现场巡检员和维修人员。
 
@@ -1825,7 +1825,7 @@ HarmonyOS 端服务现场巡检员和维修人员。
 
 ---
 
-# 34. HarmonyOS 技术原则
+# 44. HarmonyOS 技术原则
 
 固定：
 
@@ -1851,7 +1851,7 @@ HarmonyOS 端服务现场巡检员和维修人员。
 
 ---
 
-# 34. HarmonyOS 分层结构
+# 45. HarmonyOS 分层结构
 
 参考项目采用的移动端分层思路，IIOP 固定为：
 
@@ -1909,7 +1909,7 @@ Storage：
 
 ---
 
-# 34. HarmonyOS 网络封装
+# 46. HarmonyOS 网络封装
 
 统一 HttpClient。
 
@@ -1933,7 +1933,7 @@ HarmonyOS 模拟器或真机不能默认把 127.0.0.1 当作 Windows 开发机�
 
 开发时由 ApiConfig 集中配置 Gateway 地址。
 
-## 34.1 Token
+## 46.1 Token
 
 登录返回 tokenName/tokenValue。
 
@@ -1951,7 +1951,7 @@ AuthStorage 持久化。
 
 ---
 
-# 34. HarmonyOS 导航与状态
+# 47. HarmonyOS 导航与状态
 
 页面导航使用所选 API Level 当前推荐的 ArkUI 导航方案。
 
@@ -1975,7 +1975,7 @@ AuthStorage 持久化。
 
 ---
 
-# 34. HarmonyOS 页面清单
+# 48. HarmonyOS 页面清单
 
 第一版固定：
 
@@ -1998,7 +1998,7 @@ AuthStorage 持久化。
 
 ---
 
-# 34. HarmonyOS 登录页
+# 49. HarmonyOS 登录页
 
 接口：
 
@@ -2024,7 +2024,7 @@ INSPECTOR 和 MAINTAINER。
 
 ---
 
-# 34. HarmonyOS 首页
+# 50. HarmonyOS 首页
 
 首页应简单，突出现场工作。
 
@@ -2062,7 +2062,7 @@ INSPECTOR 和 MAINTAINER。
 
 ---
 
-# 34. 今日巡检页
+# 51. 今日巡检页
 
 页面：
 
@@ -2096,7 +2096,7 @@ GET /api/inspection/tasks
 
 ---
 
-# 34. 移动巡检任务详情
+# 52. 移动巡检任务详情
 
 流程：
 
@@ -2134,7 +2134,7 @@ PHOTO：
 
 ---
 
-# 34. HarmonyOS 异常上报
+# 53. HarmonyOS 异常上报
 
 页面：
 
@@ -2167,7 +2167,7 @@ POST /api/inspection/tasks/{taskId}/abnormals
 
 ---
 
-# 34. HarmonyOS 图片选择
+# 54. HarmonyOS 图片选择
 
 使用系统 Photo Picker 能力选择巡检证据。
 
@@ -2186,7 +2186,7 @@ POST /api/inspection/tasks/{taskId}/abnormals
 
 ---
 
-# 34. HarmonyOS 设备详情
+# 55. HarmonyOS 设备详情
 
 入口：
 
@@ -2217,7 +2217,7 @@ GET /api/device/devices/{id}
 
 ---
 
-# 34. HarmonyOS 告警页
+# 56. HarmonyOS 告警页
 
 接口：
 
@@ -2239,7 +2239,7 @@ CRITICAL 优先排序或突出显示。
 
 ---
 
-# 34. 我的工单
+# 57. 我的工单
 
 页面：
 
@@ -2271,7 +2271,7 @@ Tab：
 
 ---
 
-# 34. HarmonyOS 工单详情与处理
+# 58. HarmonyOS 工单详情与处理
 
 页面：
 
@@ -2310,7 +2310,7 @@ partsUsed 第一版可以使用简单动态列表：
 
 ---
 
-# 34. HarmonyOS AI 诊断
+# 59. HarmonyOS AI 诊断
 
 AI 页面主要用于查看与现场辅助。
 
@@ -2343,7 +2343,7 @@ AI 页面主要用于查看与现场辅助。
 
 ---
 
-# 34. HarmonyOS 通知
+# 60. HarmonyOS 通知
 
 第一版通过 REST：
 
@@ -2360,7 +2360,7 @@ AI 页面主要用于查看与现场辅助。
 
 ---
 
-# 34. HarmonyOS 个人中心
+# 61. HarmonyOS 个人中心
 
 展示：
 
@@ -2377,7 +2377,7 @@ AI 页面主要用于查看与现场辅助。
 
 ---
 
-# 34. HarmonyOS 错误与网络状态
+# 62. HarmonyOS 错误与网络状态
 
 必须处理：
 
@@ -2402,13 +2402,13 @@ AI 页面主要用于查看与现场辅助。
 
 ---
 
-# 34. 附件上传与展示契约
+# 63. 附件上传与展示契约
 
 G0 已将附件方案固定到 02-backend.md。
 
 第一版不增加独立文件微服务。
 
-## 34.1 巡检与异常图片
+## 63.1 巡检与异常图片
 
 上传：
 
@@ -2428,7 +2428,7 @@ GET /api/inspection/attachments/{fileKey}
 2. task item evidenceUrls；
 3. abnormal evidenceUrls。
 
-## 34.2 工单图片
+## 63.2 工单图片
 
 上传：
 
@@ -2443,7 +2443,7 @@ GET /api/maintenance/attachments/{fileKey}
 1. 工单处理证据；
 2. work-order log attachments。
 
-## 34.3 客户端处理规则
+## 63.3 客户端处理规则
 
 1. 只接受后端允许的 JPEG、PNG、WebP；
 2. 单文件上限按后端 10 MiB；
@@ -2458,17 +2458,17 @@ GET /api/maintenance/attachments/{fileKey}
 
 ---
 
-# 34. 客户端权限矩阵
+# 64. 客户端权限矩阵
 
 客户端权限以 01-database.md 与 02-backend.md 的固定权限编码为准。
 
-## 34.1 SUPER_ADMIN
+## 64.1 SUPER_ADMIN
 
 拥有全部权限，PC 显示全部菜单。
 
 HarmonyOS 可以登录，但不提供完整系统管理页面。
 
-## 34.2 ADMIN
+## 64.2 ADMIN
 
 拥有业务管理和系统管理权限，PC 可使用：
 
@@ -2479,7 +2479,7 @@ HarmonyOS 可以登录，但不提供完整系统管理页面。
 5. AI；
 6. 用户、角色、权限管理。
 
-## 34.3 INSPECTOR
+## 64.3 INSPECTOR
 
 基础权限：
 
@@ -2494,7 +2494,7 @@ PC 主要展示设备查看、巡检任务、巡检异常只读/本人相关功�
 
 HarmonyOS 是主要工作端。
 
-## 34.4 MAINTAINER
+## 64.4 MAINTAINER
 
 基础权限：
 
@@ -2515,7 +2515,7 @@ PC 和 HarmonyOS 均可处理维修主线。
 
 ---
 
-# 34. 页面与 API 对照摘要
+# 65. 页面与 API 对照摘要
 
 | 页面 | 主要 API 域 |
 |---|---|
@@ -2541,7 +2541,7 @@ PC 和 HarmonyOS 均可处理维修主线。
 
 ---
 
-# 34. 前端性能要求
+# 66. 前端性能要求
 
 这些是设计目标，最终数值需用真实环境测试。
 
@@ -2565,7 +2565,7 @@ HarmonyOS：
 
 ---
 
-# 34. 可访问性与操作安全
+# 67. 可访问性与操作安全
 
 PC：
 
@@ -2584,7 +2584,7 @@ HarmonyOS：
 
 ---
 
-# 34. Mock 数据规则
+# 68. Mock 数据规则
 
 允许 Mock 的阶段：
 
@@ -2604,7 +2604,7 @@ src/mock
 
 ---
 
-# 34. PC 测试范围
+# 69. PC 测试范围
 
 至少覆盖：
 
@@ -2630,7 +2630,7 @@ src/mock
 
 ---
 
-# 34. HarmonyOS 测试范围
+# 70. HarmonyOS 测试范围
 
 至少覆盖：
 
@@ -2655,7 +2655,7 @@ src/mock
 
 ---
 
-# 34. PC 分阶段实施顺序
+# 71. PC 分阶段实施顺序
 
 客户端代码不得一次生成全部页面。
 
@@ -2740,7 +2740,7 @@ src/mock
 
 ---
 
-# 34. HarmonyOS 分阶段实施顺序
+# 72. HarmonyOS 分阶段实施顺序
 
 HarmonyOS 在 PC 和后端核心链路稳定后开始。
 
@@ -2789,7 +2789,7 @@ HarmonyOS 在 PC 和后端核心链路稳定后开始。
 
 ---
 
-# 34. Codex 客户端开发规则
+# 73. Codex 客户端开发规则
 
 Codex 每次客户端任务必须：
 
@@ -2817,7 +2817,7 @@ Codex 每次客户端任务必须：
 
 ---
 
-# 34. 官方实现依据与参考原则
+# 74. 官方实现依据与参考原则
 
 PC 技术选择依据：
 
@@ -2839,7 +2839,7 @@ HarmonyOS 技术选择依据：
 
 ---
 
-# 34. G0 已收口的跨规范契约
+# 75. G0 已收口的跨规范契约
 
 客户端在 G0 后依赖以下固定契约：
 
@@ -2857,7 +2857,7 @@ HarmonyOS 技术选择依据：
 
 ---
 
-# 34. 当前客户端最终范围
+# 76. 当前客户端最终范围
 
 PC 第一版最终必须完成：
 
