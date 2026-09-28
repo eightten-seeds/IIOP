@@ -644,6 +644,7 @@ iiop-common 为普通 Jar，不启动。
 
 | 调用方 | 被调用方 | 用途 |
 |---|---|---|
+| device | auth | 校验责任人、获取必要用户摘要 |
 | inspection | device | 查询设备、设备分类、设备上下文 |
 | inspection | auth | 获取必要用户摘要 |
 | maintenance | device | 查询设备信息 |
@@ -702,7 +703,7 @@ iiop-common 为普通 Jar，不启动。
 巡检异常产生  
 → inspection 持久化异常  
 → 发布 RocketMQ 异常事件  
-→ maintenance 消费事件并形成缺陷或告警  
+→ maintenance 消费事件并形成缺陷  
 → ai 消费事件并创建诊断任务  
 → auth/通知逻辑向相关人员发送通知
 
@@ -799,8 +800,8 @@ iiop.ai.diagnosis
 
 用于：
 
-- AI 诊断完成通知；
-- maintenance 关联诊断结果。
+- AI 诊断完成/失败/人工确认通知；
+- maintenance 在不反向同步调用 ai 的前提下，把成功诊断的 diagnosisId 关联到对应 defect/work order。
 
 所有消费者必须考虑幂等。
 
@@ -821,10 +822,14 @@ Redis 只用于可重新构建的数据或短期状态。
 
 建议命名：
 
-- iiop:auth:permission:{userId}
+- Sa-Token 会话与权限使用框架自身 Key；
 - iiop:device:status:{deviceId}
-- iiop:dashboard:overview
-- iiop:event:consumed:{eventId}
+- iiop:dashboard:device-overview
+- iiop:dashboard:inspection-overview
+- iiop:dashboard:maintenance-overview
+- iiop:event:consumed:{consumer}:{eventId}
+- iiop:lock:inspection-plan:{planId}
+- iiop:ws:user:{userId}
 
 Redis 中的数据丢失不得导致核心业务历史不可恢复。
 
@@ -876,6 +881,17 @@ WebSocket 用于实时通知。
 3. 客户端断线后可通过 REST 查询历史通知；
 4. 客户端需要断线重连；
 5. WebSocket 不承担工单状态等核心业务状态存储。
+
+### 14.1 附件与证据文件
+
+第一版不新增独立文件微服务。
+
+- inspection 负责巡检 PHOTO 和异常证据；
+- maintenance 负责工单处理图片；
+- 公共文件安全工具可以放 iiop-common，但业务 Controller 和权限保留在各业务服务；
+- 物理文件存放在 E:/IIOP-data/uploads/；
+- 数据库 JSON 字段只保存受控访问 URL，不保存二进制或 base64；
+- 具体 API 以 02-backend.md 为准。
 
 ---
 
@@ -1068,7 +1084,7 @@ Pages
 至少需要保证：
 
 - 关键业务异常有错误日志；
-- 登录、关键权限操作可追踪；
+- 登录、关键权限操作通过应用日志和 traceId 可追踪；
 - 工单状态变化有独立流转日志；
 - AI 诊断保存模型名；
 - AI 诊断保存 prompt_version；
@@ -1094,7 +1110,8 @@ Pages
 {
   "code": 0,
   "message": "success",
-  "data": {}
+  "data": {},
+  "traceId": "..."
 }
 ```
 
