@@ -1,14 +1,18 @@
-# IIOP 客户端实现规范（最简版）
+# IIOP 客户端实现规范
 
 ## 1. 总原则
 
-PC 和 HarmonyOS 只做主业务和指定技术展示。
+PC 与 HarmonyOS 只实现课程项目主业务、真实业务联动和指定技术展示。
 
-不追求完整企业后台。
+架构保持简单，界面完成度不能以“最简”为理由降低。PC 端应达到答辩演示可用的视觉和交互质量。
 
-客户端统一访问：
+客户端统一通过 Gateway 访问：
 
 http://127.0.0.1:8080
+
+所有业务页面优先使用真实后端 API 和数据库数据。允许数据库存在演示种子数据，但禁止用大段前端静态假数据代替真实业务接口。
+
+不增加新的微服务、表、中间件或前端大型设计系统。
 
 ## 2. PC 技术栈
 
@@ -24,42 +28,168 @@ http://127.0.0.1:8080
 - Three.js
 - @vue-flow/core
 
-依赖第一次可运行后锁版本，不随意升级。
+依赖第一次可运行后锁定版本，不随意升级。
 
-## 3. PC 页面
+样式实现保持轻量：
 
-第一版只做以下页面或功能区：
+- CSS/SCSS 变量
+- Element Plus 主题覆盖
+- 少量共享布局组件
+- 页面局部样式
 
-### 登录
+不引入大型 Design System。
 
+## 3. PC 路由与页面边界
+
+核心业务必须使用真实 Vue Router 路由和独立 URL。
+
+禁止把全部业务功能塞进一个 Dashboard。
+禁止通过一个页面内大量 activePanel / v-if 模拟路由。
+
+Dashboard 只负责总览和导航入口。
+
+固定路由基线：
+
+- /login
+- /dashboard
+- /devices
+- /devices/:id
+- /devices/scene
+- /inspection/templates
+- /inspection/templates/:id
+- /inspection/plans
+- /inspection/tasks
+- /inspection/tasks/:id
+- /inspection/abnormals
+- /inspection/abnormals/:id
+- /maintenance/defects
+- /maintenance/defects/:id
+- /maintenance/work-orders
+- /maintenance/work-orders/:id
+- /ai/diagnoses
+- /ai/diagnoses/:id
+- /system/users
+- /system/roles
+- /notifications
+
+允许为表单增加必要的 create/edit 子路由或弹窗，但不得改变上述主路由结构。
+
+必须支持：
+
+- 左侧菜单导航
+- 面包屑
+- 列表进入详情
+- 详情进入关联对象
+- 浏览器前进/后退
+- 刷新详情 URL 后可恢复页面
+- 未登录访问业务路由时跳转 /login
+- 根据 RBAC 权限控制菜单、页面入口和关键操作
+
+## 4. PC 业务导航主链
+
+前端必须体现真实业务对象之间的关联关系。
+
+答辩主链至少可以通过页面自然跳转：
+
+Dashboard
+→ 设备详情
+→ 巡检任务详情
+→ 巡检异常详情
+→ 缺陷详情
+→ 工单详情
+→ AI 诊断详情
+
+详情页需要显示后端已有的关联 ID，并提供进入相关对象的明确入口。
+
+不得为了跳转额外复制业务数据到前端。
+
+## 5. 登录与整体布局
+
+### 登录页
+
+登录页需要具有工业科技项目视觉，不使用只有白底表单的默认样式。
+
+至少包括：
+
+- IIOP 项目名称或标识
 - username
 - password
-- 登录
-- 退出
+- 登录按钮
+- 登录中状态
+- 登录失败提示
 
-### Dashboard
+### 后台主布局
 
-只展示：
+设备、巡检、维修、AI、系统、通知使用统一后台框架：
 
-- 设备数量
-- 设备状态分布
-- 巡检任务数量
-- 工单数量
-- 2 到 4 个 ECharts 图表
+- 左侧 Sidebar
+- 顶部 Header
+- Breadcrumb
+- 内容区
+- 通知入口
+- 当前用户和退出入口
 
-不做 BI 配置。
+布局、间距、按钮层级和状态颜色保持统一。
 
-### 设备
+## 6. Dashboard
+
+Dashboard 定位为工业设备智能巡检运维总览。
+
+建议使用深色工业监控视觉。
+
+展示真实业务统计：
+
+- 设备总数
+- 在线/离线/故障等状态
+- 巡检任务统计
+- 异常统计
+- 缺陷统计
+- 工单统计
+- 风险分布
+
+使用 2 到 4 个 ECharts 图表即可。
+
+图表要求：
+
+- 统一主题
+- tooltip 可读
+- legend 清晰
+- 坐标轴和字体正常
+- 状态颜色语义统一
+- 禁止随机彩虹配色
+
+Dashboard 只做总览和入口，不承载设备、巡检、维修的完整 CRUD。
+
+## 7. 设备模块
+
+### /devices
 
 - 设备列表
-- 新增/编辑
-- 设备详情
-- 指标趋势
+- 筛选
+- 分页
+- 新增
+- 编辑
+- 进入设备详情
+
+### /devices/:id
+
+至少展示：
+
+- 基础档案
+- 分类
+- 状态
+- 风险等级
+- 指标
 - SOP
+- 最近巡检信息
+- 最近维修相关信息
+- 可进入关联巡检任务、异常、缺陷、工单、AI 诊断
 
-### Three.js
+### /devices/scene
 
-只做一个页面：
+Three.js 使用独立业务页面。
+
+必须真实使用：
 
 - Scene
 - Camera
@@ -67,22 +197,31 @@ http://127.0.0.1:8080
 - Grid
 - OrbitControls
 - 设备位置
-- 状态/风险简单颜色
-- 点击显示设备摘要
-- 无模型时 Box fallback
+- 状态/风险颜色
+- 点击设备后显示业务摘要
 
-不做数字孪生、动画系统或复杂模型管理。
+如果设备没有 glTF 模型，允许使用视觉完整的 Box fallback。
 
-### 巡检
+Three.js 页面需要使用真实设备数据，不做孤立 Demo。
 
-可以合并为少量页面：
+不做复杂数字孪生、动画系统或模型管理平台。
 
-- 模板
-- 计划
-- 任务
-- 异常
+## 8. 巡检模块
 
-Vue Flow 只放在模板编辑：
+### /inspection/templates
+
+- 模板列表
+- 新增/编辑
+- 进入模板详情
+
+### /inspection/templates/:id
+
+- 模板基本信息
+- 检查项
+- Vue Flow 流程图
+- 保存/回显 flow_definition
+
+Vue Flow 支持的业务节点：
 
 - START
 - CHECK_ITEM
@@ -90,56 +229,151 @@ Vue Flow 只放在模板编辑：
 - REPORT_ABNORMAL
 - END
 
-只保存/读取 flow_definition JSON。
+需要对节点、连线、选中状态进行基础视觉定制，禁止直接保留默认 Demo 外观。
 
-### 维修
+### /inspection/plans
 
-用一个或少量页面完成：
+- 计划列表
+- 新增/编辑
+- CRON 计划字段
+- 人工生成任务入口
 
-- 告警
-- 缺陷
-- 工单
-- 维修
-- 验收
+### /inspection/tasks
 
-### AI
+- 任务列表
+- 状态筛选
+- 进入任务详情
 
-只做：
+### /inspection/tasks/:id
 
+- 任务信息
+- 检查项快照
+- 开始执行
+- NUMBER / BOOLEAN / TEXT 填写
+- 完成任务
+- 查看产生的异常
+
+### /inspection/abnormals
+
+- 异常列表
+- 风险/状态筛选
+- 进入异常详情
+
+### /inspection/abnormals/:id
+
+- 异常详情
+- 设备关联
+- 巡检任务关联
+- 缺陷关联
+- AI 诊断入口或关联结果
+
+## 9. 维修模块
+
+### /maintenance/defects
+
+- 缺陷列表
+- 来源
+- 风险
+- 状态
+- 进入详情
+
+### /maintenance/defects/:id
+
+- 缺陷详情
+- 来源异常或告警
+- 设备
+- AI 诊断
+- 相关工单
+- 创建工单入口
+
+### /maintenance/work-orders
+
+- 工单列表
+- 状态筛选
+- 负责人
+- 进入详情
+
+### /maintenance/work-orders/:id
+
+至少支持：
+
+- 工单详情
+- 缺陷关联
+- 设备关联
+- AI 诊断关联
+- ASSIGNED / PROCESSING 等状态展示
+- 开始维修
+- 填写维修记录
+- 提交验收
+- 查看验收记录
+
+工单生命周期应与后端现有状态保持一致，不在前端重新定义状态机。
+
+## 10. AI 模块
+
+### /ai/diagnoses
+
+- 诊断列表
+- 状态
+- 风险
+- 触发类型
 - 发起诊断
-- 查看结果
-- 查看 5 节点 trace
-- confirm / reject
+- 进入详情
 
-不做聊天界面。
+### /ai/diagnoses/:id
 
-### 系统
+展示真实结构化结果：
 
-只保留：
+- 风险等级
+- 异常摘要
+- possibleCauses
+- investigationSteps
+- maintenanceAdvice
+- safetyNotice
+- workOrderDraft
+- humanConfirmationRequired
+- 5 节点 workflow trace
+- confirm
+- reject
 
-- 用户
-- 角色
+5 个固定节点：
 
-权限表可以只读，不要求复杂权限树编辑 UI。
+1. LOAD_CONTEXT
+2. ANALYZE_WITH_DEEPSEEK
+3. RISK_CHECK
+4. GENERATE_ADVICE
+5. PREPARE_WORK_ORDER_DRAFT
 
-### 通知
+AI 页面不做聊天、Chat Memory、RAG、Tool Calling 或 Agent 操作界面。
+
+AI 只能提供诊断和工单草案建议，前端不得把 AI 结果表现成已自动创建工单。
+
+## 11. 系统模块
+
+### /system/users
+
+- 用户列表
+- 新增/编辑
+- 启用/禁用
+- 角色分配
+
+### /system/roles
+
+- 角色列表
+- 角色信息
+- 权限查看或轻量编辑
+
+不做复杂权限设计器。
+
+菜单和页面入口需要根据当前 permissions 做 RBAC 控制。
+
+## 12. 通知与 WebSocket
+
+### /notifications
 
 - 通知列表
+- 已读/未读状态
 - 未读数量
-- WebSocket 到达后刷新
-
-## 4. PC 状态管理
-
-Pinia 只保存：
-
-- token
-- currentUser
-- permissions
-- notification unread count
-
-不要把所有业务数据塞进 Store。
-
-## 5. WebSocket
 
 PC 使用浏览器原生 WebSocket：
 
@@ -147,17 +381,133 @@ ws://127.0.0.1:8080/ws/notifications?token=...
 
 只处理通知 JSON。
 
-断线后简单定时重连即可。
+业务要求：
 
-## 6. HarmonyOS 技术栈
+- 顶部通知入口
+- 未读数量
+- 收到真实 WS 消息后自然提示
+- 刷新通知列表
+- 简单定时重连
+
+WebSocket 是实时提醒，sys_notification 仍是通知事实来源。
+
+不使用 STOMP、SockJS、Redis Pub/Sub。
+
+## 13. PC 状态管理
+
+Pinia 只保存必要全局状态：
+
+- token
+- currentUser
+- permissions
+- notification unread count
+
+业务列表、详情和表单数据尽量由页面按 API 生命周期管理。
+
+不要把所有业务数据塞进 Store。
+
+## 14. 视觉质量
+
+“课程项目简化”只约束系统复杂度，不等于页面简陋。
+
+视觉目标：
+
+- 登录页具有工业科技感
+- Dashboard 深色工业监控风格
+- 设备、巡检、维修、AI、系统页采用统一的浅色后台风格
+- Header、Sidebar、内容区、表格、筛选、表单、详情保持一致
+- 统一主色、状态色、圆角、阴影、字体层级、间距、图标和按钮层级
+
+关键页面必须有：
+
+- loading
+- empty
+- error
+- disabled
+- success feedback
+
+重点适配：
+
+- 1920x1080
+- 1440x900
+- 1366x768
+
+在这些尺寸下不得出现明显布局断裂、主内容被遮挡或关键操作不可见。
+
+## 15. S4 分阶段
+
+S4 仍然是一个 PC Web 阶段，为降低返工允许拆成两轮。
+
+### S4-A PC Core
+
+完成：
+
+- Vue 项目基础
+- Vue Router
+- Axios
+- Pinia
+- Element Plus
+- 登录
+- 路由守卫
+- RBAC
+- AdminLayout
+- Breadcrumb
+- Dashboard 基础数据
+- 设备
+- 巡检
+- 维修
+- AI
+- 用户/角色
+- 通知
+- 列表/详情
+- 跨模块业务跳转
+
+S4-A 先保证真实页面结构、API 和业务链可跑，同时保持基础视觉完整。
+
+### S4-B Visualization & Polish
+
+完成：
+
+- ECharts
+- Three.js
+- Vue Flow
+- WebSocket UX
+- Dashboard 完整视觉
+- 登录页视觉
+- 页面统一视觉
+- 响应式修整
+- loading/empty/error/success 等状态补齐
+
+不得在 S4-B 扩张业务范围。
+
+## 16. S4 PC PASS
+
+至少满足：
+
+- npm build 通过
+- 登录、退出和未登录路由守卫可用
+- Vue Router 独立业务 URL 可直接刷新
+- RBAC 菜单和关键入口生效
+- 设备、巡检、维修、AI 主业务页面使用真实 API
+- 业务详情可以沿关联对象跳转
+- Dashboard 使用真实数据
+- ECharts 可见
+- Three.js 可交互且绑定真实设备
+- Vue Flow 可保存并回显真实模板 flow_definition
+- WebSocket 可收到真实通知
+- AI 可发起、查看结果和 trace，并 confirm/reject
+- 关键页面具备完整反馈状态
+- 1366x768、1440x900、1920x1080 无明显布局问题
+
+## 17. HarmonyOS 技术栈
 
 - ArkTS
 - ArkUI
 - HTTP REST
 
-第一版不做 HarmonyOS WebSocket。
+HarmonyOS 第一版不做 WebSocket。
 
-## 7. HarmonyOS 页面
+## 18. HarmonyOS 页面
 
 只做：
 
@@ -169,9 +519,9 @@ ws://127.0.0.1:8080/ws/notifications?token=...
 6. WorkOrderDetail
 7. AiResult
 
-Home/Profile 如果需要可以合并为简单入口页，不单独扩展功能。
+Home/Profile 如有需要可以作为简单入口，不扩展额外业务。
 
-## 8. HarmonyOS 巡检
+## 19. HarmonyOS 巡检
 
 用户可以：
 
@@ -183,7 +533,7 @@ Home/Profile 如果需要可以合并为简单入口页，不单独扩展功能�
 
 PHOTO 第一版可以不作为阻塞项。
 
-## 9. HarmonyOS 维修
+## 20. HarmonyOS 维修
 
 用户可以：
 
@@ -192,7 +542,7 @@ PHOTO 第一版可以不作为阻塞项。
 - 填写维修结果
 - 提交验收
 
-## 10. AI 移动查看
+## 21. HarmonyOS AI
 
 只展示：
 
@@ -204,20 +554,7 @@ PHOTO 第一版可以不作为阻塞项。
 
 不做聊天。
 
-## 11. 客户端 PASS
-
-PC：
-
-- npm build 通过
-- 登录可用
-- 设备/巡检/维修主链可用
-- ECharts 可见
-- Three.js 可交互
-- Vue Flow 可保存回显
-- WebSocket 可收到通知
-- AI 可发起并查看
-
-HarmonyOS：
+## 22. HarmonyOS PASS
 
 - 可以登录
 - 可以完成一条巡检
@@ -225,4 +562,4 @@ HarmonyOS：
 - 可以处理一条工单
 - 可以查看 AI 结果
 
-达到以上即可，不扩展额外页面。
+达到以上即可，不扩展额外功能。
