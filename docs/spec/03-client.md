@@ -155,7 +155,7 @@ MAINTAINER：维修人员，默认 /maintenance/work-orders，重点是设备、
 - 禁止把无权限用户循环重定向到 /dashboard。
 - /403 提供返回当前角色默认首页的入口。
 
-S4-A 必须用四类本地测试身份分别验证 SUPER_ADMIN、ADMIN、INSPECTOR、MAINTAINER。每个角色至少验证默认落地页、可见菜单、一个允许操作、一个禁止操作或隐藏入口，以及直接输入无权限 URL 的处理。
+S4-A 必须用四类本地测试身份分别验证 SUPER_ADMIN、ADMIN、INSPECTOR、MAINTAINER。四类身份都要验证默认落地页和可见菜单。SUPER_ADMIN 验证至少一个系统治理操作和一个业务操作；ADMIN、INSPECTOR、MAINTAINER 各验证至少一个允许操作、一个禁止操作或隐藏入口，并验证直接输入无权限 URL 时进入 /403 或得到明确无权限反馈。
 
 测试账号和密码只存在本机开发环境，不进入 Git。
 
