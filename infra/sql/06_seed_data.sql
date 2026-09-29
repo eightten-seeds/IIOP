@@ -6,7 +6,7 @@ USE iiop_auth;
 INSERT IGNORE INTO sys_role (id, role_code, role_name, description, status, deleted)
 VALUES
     (1001, 'SUPER_ADMIN', '超级管理员', '系统级管理角色', 'ENABLED', 0),
-    (1002, 'ADMIN', '业务管理员', '业务与系统管理角色', 'ENABLED', 0),
+    (1002, 'ADMIN', '业务管理员', '设备巡检运维业务管理角色', 'ENABLED', 0),
     (1003, 'INSPECTOR', '巡检人员', '现场巡检角色', 'ENABLED', 0),
     (1004, 'MAINTAINER', '维修人员', '维修工单角色', 'ENABLED', 0);
 
@@ -47,11 +47,26 @@ VALUES
     (2032, 'system:permission:update', '更新权限', 'API', 32, 'ENABLED', 0),
     (2033, 'system:permission:delete', '删除权限', 'API', 33, 'ENABLED', 0);
 
--- SUPER_ADMIN 与 ADMIN 按规范拥有全部固定权限；其他角色按规范授予最小业务权限。
+-- SUPER_ADMIN 拥有全部权限；ADMIN 管理业务并可分配已有角色，但不改变平台权限模型。
 INSERT IGNORE INTO sys_role_permission (id, role_id, permission_id)
-SELECT 300000 + (r.id - 1001) * 100 + (p.id - 2000), r.id, p.id
-FROM sys_role r CROSS JOIN sys_permission p
-WHERE r.role_code IN ('SUPER_ADMIN', 'ADMIN');
+SELECT 300000 + (p.id - 2000), 1001, p.id
+FROM sys_permission p;
+
+INSERT IGNORE INTO sys_role_permission (id, role_id, permission_id)
+SELECT 303000 + (p.id - 2000), 1002, p.id
+FROM sys_permission p
+WHERE p.permission_code IN (
+    'dashboard:view',
+    'device:view', 'device:create', 'device:update', 'device:delete',
+    'inspection:view', 'inspection:template:manage', 'inspection:plan:manage',
+    'inspection:execute', 'inspection:abnormal:process',
+    'maintenance:view', 'maintenance:alarm:process', 'maintenance:defect:process',
+    'maintenance:workorder:create', 'maintenance:workorder:process',
+    'maintenance:workorder:accept',
+    'ai:view', 'ai:diagnosis', 'ai:confirm',
+    'system:user:view', 'system:user:create', 'system:user:update', 'system:user:role',
+    'system:role:view', 'system:permission:view'
+);
 
 INSERT IGNORE INTO sys_role_permission (id, role_id, permission_id)
 SELECT 304000 + (p.id - 2000), 1003, p.id
@@ -65,9 +80,9 @@ INSERT IGNORE INTO sys_role_permission (id, role_id, permission_id)
 SELECT 305000 + (p.id - 2000), 1004, p.id
 FROM sys_permission p
 WHERE p.permission_code IN (
-    'device:view', 'maintenance:view', 'maintenance:alarm:process',
+    'dashboard:view', 'device:view', 'maintenance:view', 'maintenance:alarm:process',
     'maintenance:defect:process', 'maintenance:workorder:create',
-    'maintenance:workorder:process', 'maintenance:workorder:accept',
+    'maintenance:workorder:process',
     'ai:view', 'ai:diagnosis', 'ai:confirm'
 );
 
