@@ -97,12 +97,28 @@ Dashboard
 → 巡检任务详情
 → 巡检异常详情
 → 缺陷详情
-→ 工单详情
 → AI 诊断详情
+→ 人工确认
+→ 人工创建工单
+→ 工单详情
+→ 维修处理
+→ 验收
 
 详情页需要显示后端已有的关联 ID，并提供进入相关对象的明确入口。
 
 不得为了跳转额外复制业务数据到前端。
+
+角色交接基线：
+
+- INSPECTOR：执行巡检并上报异常。
+- 系统：通过 RocketMQ 将异常转成 maintenance 缺陷。
+- ADMIN / MAINTAINER：查看缺陷、发起或查看 AI 诊断，并在有 ai:confirm 权限时完成人工确认。
+- AI：只生成诊断和工单草案，不直接创建工单。
+- ADMIN / MAINTAINER：在诊断 CONFIRMED 后，使用 maintenance:workorder:create 人工审核草案并提交真实工单。
+- MAINTAINER：执行维修处理。
+- ADMIN / SUPER_ADMIN：执行工单验收。
+
+如果现有 API 无法按真实关联关系查询目标对象，Gate 2 允许在数据所属服务中增加最小只读查询参数或查询端点；禁止新增表、微服务或通过前端扫描分页数据伪造关联。
 
 ## 5. 登录与整体布局
 
@@ -142,7 +158,7 @@ PC 必须保存登录接口和 /api/auth/me 返回的 roles 与 permissions。
 
 SUPER_ADMIN：系统管理员，默认 /dashboard，可进行全部业务与系统治理。
 
-ADMIN：业务管理员，默认 /dashboard，负责设备、巡检、维修、AI 等业务管理，可维护日常用户并分配已有角色，可查看角色与权限，但不能修改平台权限模型。
+ADMIN：业务管理员，默认 /dashboard，负责设备、巡检、维修、AI 等业务管理，可维护日常用户并分配已有的 ADMIN / INSPECTOR / MAINTAINER 角色，可查看角色与权限，但不能授予或移除 SUPER_ADMIN，也不能修改平台权限模型。
 
 INSPECTOR：巡检人员，默认 /inspection/tasks，重点是设备查看、巡检执行、异常上报和 AI 辅助诊断。系统管理、维修管理、巡检模板/计划管理入口不显示。
 
@@ -385,6 +401,8 @@ AI 只能提供诊断和工单草案建议，前端不得把 AI 结果表现成�
 - 启用/禁用
 - 角色分配
 - 角色分配调用现有用户角色 API
+- ADMIN 只能分配 ADMIN / INSPECTOR / MAINTAINER
+- SUPER_ADMIN 的授予或移除必须由后端强制要求 system:role:permission，不能只依赖前端隐藏
 - 用户状态修改调用后端专用 status API，不能把 status 塞进普通用户编辑 DTO
 
 ### /system/roles
@@ -599,6 +617,9 @@ NUMBER / BOOLEAN / TEXT 必须使用适合的数据输入控件，不能统一�
 - 展示五节点 trace
 - PENDING confirmation 时显示确认/拒绝操作
 - CONFIRMED / REJECTED 后显示最终状态，不能继续重复提交
+- CONFIRMED 且当前用户拥有 maintenance:workorder:create 时，可以显示“根据诊断草案创建工单”
+- 创建工单必须由用户检查并显式提交，携带真实 aiDiagnosisId，并在已有真实关联时携带 defectId/deviceId
+- AI confirm 本身绝不直接创建 maintenance 数据
 - confirm/reject 使用确认对话框或明确操作区域
 - 提交时 loading/disabled
 - 成功后刷新真实状态
@@ -925,12 +946,14 @@ PHOTO 第一版可以不作为阻塞项。
 
 ## 20. HarmonyOS 维修
 
-用户可以：
+面向 MAINTAINER 的现场端可以：
 
 - 查看工单
 - 开始维修
-- 填写维修结果
-- 提交验收
+- 填写并提交维修结果
+- 将工单推进到 WAITING_ACCEPTANCE
+
+HarmonyOS 第一版不提供工单验收。验收由 PC 端 ADMIN / SUPER_ADMIN 完成。
 
 ## 21. HarmonyOS AI
 
@@ -949,7 +972,7 @@ PHOTO 第一版可以不作为阻塞项。
 - 可以登录
 - 可以完成一条巡检
 - 可以提交异常
-- 可以处理一条工单
+- 可以处理一条工单并提交维修结果至待验收状态
 - 可以查看 AI 结果
 
 达到以上即可，不扩展额外功能。
