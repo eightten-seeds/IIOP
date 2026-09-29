@@ -13,9 +13,14 @@ S1 基础设施
 → S5 HarmonyOS  
 → S6 联调、演示、冻结和答辩材料
 
-S1 已完成。
+当前：
 
-从现在开始只剩 5 个阶段。
+- S1：PASS
+- S2：PASS
+- S3：PASS
+- S4：进行中
+- S5：未开始
+- S6：未开始
 
 ## 2. S1 基础设施
 
@@ -34,8 +39,6 @@ S1 已完成。
 
 ## 3. S2 后端
 
-S2 只分两轮。
-
 ### S2-A common + auth + gateway
 
 状态：PASS。
@@ -51,17 +54,17 @@ S2 只分两轮。
 - Gateway 路由
 - 基础 RBAC
 
-最新最简规则下：
+当前规则：
 
-- 不再要求 Same-Token 全局保护
-- 不再要求完整 Nacos Config 搬迁
-- 不再因为这些内容返工
-
-只有本机 Nacos namespace UUID 如果仍写死，可在下一轮顺手改成环境变量，不单独开修复任务。
+- 不要求 Same-Token 全局保护
+- 不要求完整 Nacos Config 搬迁
+- 不因为生产级治理能力返工
 
 ### S2-B 业务后端 + 最小中间件闭环
 
-一次完成：
+状态：PASS。
+
+已完成：
 
 device：
 
@@ -93,24 +96,11 @@ maintenance：
 - auth 原生 WebSocket 通知
 - Gateway 一个 Sentinel 限流规则
 
-验收：
-
-- Maven build/test
-- device/inspection/maintenance 能启动和注册
-- 设备 CRUD 可跑
-- 巡检能创建异常
-- MQ 能生成 defect
-- 工单能维修并验收
-- WebSocket 能收到一条真实通知
-- Sentinel 能触发一次 429
-
-S2-B 状态：PASS。
-
 ## 4. S3 AI
 
-一轮完成。
+状态：PASS。
 
-实现：
+已完成：
 
 - 2 张 AI 表对应 Entity/Mapper
 - Feign 读取上下文
@@ -118,8 +108,12 @@ S2-B 状态：PASS。
 - LangChain4j
 - LangGraph4j 5 节点
 - 同步 POST diagnosis
-- 结果/trace
+- 结果与 workflow trace
 - confirm/reject
+- 真实 DeepSeek 联调
+- HIGH/CRITICAL 风险兜底
+- 受控失败持久化
+- JSON 字段真实类型验证
 
 不做：
 
@@ -130,48 +124,72 @@ S2-B 状态：PASS。
 - Chat
 - Tool Calling
 
-验收：
+S3 最终运行修复基线：
 
-- 真 DeepSeek 成功一次
-- 5 节点 trace
-- 结果入库
-- HIGH/CRITICAL 可确认
-- build/test
+586246ec3966d8139fdc32699c574e61bb6ef1e0
 
 ## 5. S4 PC Web
 
-原则上一次主任务完成。
+状态：进行中。
 
-页面只做：
+S4 仍算一个阶段，为降低返工拆成两轮。
 
-- 登录
-- Dashboard
-- 设备
-- Three.js 场景
-- 巡检
-- Vue Flow
-- 维修
-- AI
+### S4-A PC Core
+
+完成：
+
+- Vue 3 / Vite / TypeScript 基础
+- Vue Router
+- Axios
+- Pinia
+- Element Plus
+- 登录/退出
+- 路由守卫
+- RBAC
+- AdminLayout
+- Sidebar / Header / Breadcrumb
+- Dashboard 基础数据
+- 设备页面
+- 巡检页面
+- 维修页面
+- AI 页面
 - 用户/角色
 - 通知
+- 列表/详情
+- 真实 API
+- 跨模块业务跳转
 
-必须体现：
+核心业务必须使用独立 URL，不允许把全部功能放进一个 Dashboard。
+
+详细页面与视觉要求以 docs/spec/03-client.md 为准。
+
+### S4-B Visualization & Polish
+
+完成：
 
 - ECharts
 - Three.js
 - Vue Flow
-- WebSocket
+- WebSocket UX
+- Dashboard 完整视觉
+- 登录页视觉
+- 页面统一视觉
+- 响应式修整
+- loading / empty / error / success feedback
 
-不做复杂视觉系统和额外平台。
-
-如果一次任务过大，只允许机械拆成 S4-A 页面和 S4-B 可视化，不增加功能范围。
+S4-B 不扩张业务范围。
 
 验收：
 
 - npm build
-- 主页面可访问
+- 独立业务路由可访问和刷新
 - 真实 API
-- 四项展示技术可用
+- 设备/巡检/维修/AI 主链可用
+- ECharts 可见
+- Three.js 可交互并绑定真实设备
+- Vue Flow 可保存回显真实 flow_definition
+- WebSocket 可收到通知
+- 关键页面具有答辩演示级视觉完成度
 
 ## 6. S5 HarmonyOS
 
@@ -214,12 +232,13 @@ S2-B 状态：PASS。
 → RocketMQ  
 → 缺陷  
 → AI 诊断  
+→ 人工确认  
 → 工单  
 → 维修  
 → 验收  
 → PC/HarmonyOS 查看
 
-额外只测试：
+额外测试：
 
 - DeepSeek 失败
 - MQ 重复消息
@@ -283,10 +302,12 @@ Codex 不得自行进入下一阶段。
 
 ## 10. 当前阶段
 
-S1：PASS
-S2-A：PASS
-S2-B：PASS；当前阶段为 S3（AI 结构化诊断）。
+S1：PASS  
+S2-A：PASS  
+S2-B：PASS  
+S3：PASS  
+S4-A：当前阶段
 
 当前：
 
-**S3 AI**
+**S4-A PC Core**
