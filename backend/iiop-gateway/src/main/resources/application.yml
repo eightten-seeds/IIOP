@@ -4,10 +4,6 @@ server:
 spring:
   application:
     name: iiop-gateway
-  config:
-    import:
-      - optional:nacos:iiop-shared.yaml?group=${NACOS_GROUP:IIOP_GROUP}
-      - optional:nacos:iiop-gateway.yaml?group=${NACOS_GROUP:IIOP_GROUP}
   data:
     redis:
       host: ${REDIS_HOST:127.0.0.1}
@@ -17,11 +13,7 @@ spring:
     nacos:
       discovery:
         server-addr: ${NACOS_SERVER_ADDR:127.0.0.1:8848}
-        namespace: ${NACOS_NAMESPACE:996450af-6fc6-431b-9fbc-aa3966f9e856}
-        group: ${NACOS_GROUP:IIOP_GROUP}
-      config:
-        server-addr: ${NACOS_SERVER_ADDR:127.0.0.1:8848}
-        namespace: ${NACOS_NAMESPACE:996450af-6fc6-431b-9fbc-aa3966f9e856}
+        namespace: ${NACOS_NAMESPACE:}
         group: ${NACOS_GROUP:IIOP_GROUP}
     gateway:
       server:

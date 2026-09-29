@@ -1,6 +1,5 @@
 package com.iiop.gateway.filter;
 
-import cn.dev33.satoken.same.SaSameUtil;
 import com.iiop.common.constant.HeaderConstants;
 import java.util.UUID;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
@@ -20,7 +19,6 @@ public class RequestContextFilter implements GlobalFilter, Ordered {
         ServerHttpRequest request=exchange.getRequest().mutate().headers(headers->{
             headers.set(HeaderConstants.REQUEST_ID,finalRequestId);
             headers.set(HeaderConstants.TRACE_ID,finalRequestId);
-            headers.set(SaSameUtil.SAME_TOKEN,SaSameUtil.getToken());
         }).build();
         exchange.getResponse().getHeaders().set(HeaderConstants.REQUEST_ID,finalRequestId);
         exchange.getResponse().getHeaders().set(HeaderConstants.TRACE_ID,finalRequestId);

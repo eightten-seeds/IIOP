@@ -2,7 +2,6 @@ package com.iiop.auth.support;
 
 import cn.dev33.satoken.exception.NotLoginException;
 import cn.dev33.satoken.exception.NotPermissionException;
-import cn.dev33.satoken.exception.SameTokenInvalidException;
 import com.iiop.common.api.ErrorCode;
 import com.iiop.common.api.Result;
 import com.iiop.common.exception.BizException;
@@ -36,10 +35,6 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(NotPermissionException.class)
     ResponseEntity<Result<Void>> forbidden(NotPermissionException ex) {
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Result.failure(ErrorCode.FORBIDDEN, ErrorCode.FORBIDDEN.getMessage()));
-    }
-    @ExceptionHandler(SameTokenInvalidException.class)
-    ResponseEntity<Result<Void>> invalidSameToken(SameTokenInvalidException ex) {
-        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Result.failure(ErrorCode.FORBIDDEN, "非法的内部服务调用"));
     }
     @ExceptionHandler(Exception.class)
     ResponseEntity<Result<Void>> other(Exception ex) {
