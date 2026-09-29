@@ -71,6 +71,7 @@ Dashboard 只负责总览和导航入口。
 - /system/users
 - /system/roles
 - /notifications
+- /403
 
 允许为表单增加必要的 create/edit 子路由或弹窗，但不得改变上述主路由结构。
 
@@ -130,6 +131,33 @@ Dashboard
 - 当前用户和退出入口
 
 布局、间距、按钮层级和状态颜色保持统一。
+
+## 5.1 角色工作视角与默认落地页
+
+PC 必须保存登录接口和 /api/auth/me 返回的 roles 与 permissions。
+
+- roles 用于工作视角、默认落地页、Dashboard 重点和菜单优先级。
+- permissions 用于页面、按钮和 API 的最终授权。
+- 禁止使用角色名绕过 permission 检查。
+
+SUPER_ADMIN：系统管理员，默认 /dashboard，可进行全部业务与系统治理。
+
+ADMIN：业务管理员，默认 /dashboard，负责设备、巡检、维修、AI 等业务管理，可维护日常用户并分配已有角色，可查看角色与权限，但不能修改平台权限模型。
+
+INSPECTOR：巡检人员，默认 /inspection/tasks，重点是设备查看、巡检执行、异常上报和 AI 辅助诊断。系统管理、维修管理、巡检模板/计划管理入口不显示。
+
+MAINTAINER：维修人员，默认 /maintenance/work-orders，重点是设备、告警、缺陷、工单处理和 AI 辅助诊断。维修人员不执行工单验收，验收由 ADMIN 或 SUPER_ADMIN 完成。
+
+无权限处理：
+
+- 未登录跳 /login。
+- 已登录但无页面权限跳 /403。
+- 禁止把无权限用户循环重定向到 /dashboard。
+- /403 提供返回当前角色默认首页的入口。
+
+S4-A 必须用四类本地测试身份分别验证 SUPER_ADMIN、ADMIN、INSPECTOR、MAINTAINER。每个角色至少验证默认落地页、可见菜单、一个允许操作、一个禁止操作或隐藏入口，以及直接输入无权限 URL 的处理。
+
+测试账号和密码只存在本机开发环境，不进入 Git。
 
 ## 6. Dashboard
 
@@ -356,16 +384,20 @@ AI 只能提供诊断和工单草案建议，前端不得把 AI 结果表现成�
 - 新增/编辑
 - 启用/禁用
 - 角色分配
+- 角色分配调用现有用户角色 API
+- 用户状态修改调用后端专用 status API，不能把 status 塞进普通用户编辑 DTO
 
 ### /system/roles
 
 - 角色列表
 - 角色信息
-- 权限查看或轻量编辑
+- 权限查看
+- SUPER_ADMIN 可进行轻量权限编辑
+- ADMIN 只能查看角色/权限并给用户分配已有角色，不能修改权限模型
 
 不做复杂权限设计器。
 
-菜单和页面入口需要根据当前 permissions 做 RBAC 控制。
+菜单和页面入口根据 permissions 做 RBAC 控制；roles 只用于岗位工作视角和默认落地。
 
 ## 12. 通知与 WebSocket
 
@@ -399,6 +431,7 @@ Pinia 只保存必要全局状态：
 
 - token
 - currentUser
+- roles
 - permissions
 - notification unread count
 
@@ -612,7 +645,7 @@ S4-A Gate 2 重点检查：
 
 ## 15. S4 分阶段
 
-S4 仍然是一个 PC Web 阶段，为降低返工允许拆成两轮。
+S4 仍然是一个 PC Web 阶段。S4-A 内部使用三个质量 Gate，S4-B 单独完成可视化和视觉强化。
 
 ### S4-A PC Core
 
@@ -638,7 +671,37 @@ S4 仍然是一个 PC Web 阶段，为降低返工允许拆成两轮。
 - 列表/详情
 - 跨模块业务跳转
 
-S4-A 先保证真实页面结构、API 和业务链可跑，同时保持基础视觉完整。
+S4-A 先保证真实页面结构、API、角色体验和业务链可跑，同时保持基础视觉完整。
+
+#### S4-A Gate 1：身份、角色与交互基础
+
+- login/logout/me
+- token/currentUser/roles/permissions
+- 四角色默认落地页
+- Router Guard 与 /403
+- RBAC Sidebar 与关键按钮基础能力
+- AdminLayout / Header / Breadcrumb
+- 中文化与公共状态映射
+- loading / disabled / success / error / confirm 基础反馈
+
+#### S4-A Gate 2：业务交互
+
+- 设备、巡检、异常、缺陷、工单、AI、用户、角色、通知
+- 状态驱动操作
+- 用户角色分配和角色权限查看/轻量编辑
+- 真实关联导航
+- 写操作完整反馈闭环
+
+#### S4-A Gate 3：真实运行
+
+- 四角色真实登录
+- 四角色菜单、按钮和 /403
+- 完整业务主链运行
+- 详情 URL 刷新与浏览器前进/后退
+- 最终 npm build
+- Secret 检查
+
+Gate 1、Gate 2、Gate 3 均通过后，S4-A 才能 PASS。
 
 ### S4-B Visualization & Polish
 
@@ -652,9 +715,28 @@ S4-A 先保证真实页面结构、API 和业务链可跑，同时保持基础�
 - 登录页视觉
 - 页面统一视觉
 - 响应式修整
-- loading/empty/error/success 等状态补齐
+- 对 S4-A 已有 loading/empty/error/success 状态进行视觉统一和精修
 
 不得在 S4-B 扩张业务范围。
+
+## 15.1 指定技术真实使用矩阵
+
+指定技术必须参与真实业务，不能只安装依赖或制作孤立 Demo。
+
+S1-S3 已落地并在 S6 复核：MySQL、MyBatis-Plus、Redis、Sa-Token、Nacos、Sentinel、RocketMQ、OpenFeign、DeepSeek、LangChain4j、LangGraph4j、Spring 原生 WebSocket。
+
+S4-A 必须真实使用：Vue 3、Vite、TypeScript、Vue Router、Axios、Pinia、pinia-plugin-persistedstate、Element Plus。
+
+S4-B 必须真实使用：
+
+- ECharts：Dashboard 绑定真实设备、巡检、异常、缺陷、工单统计。
+- Three.js：/devices/scene 绑定真实设备坐标、状态、风险和点击摘要。
+- @vue-flow/core：巡检模板 flow_definition 的编辑、保存和回显。
+- 浏览器原生 WebSocket：接收 /ws/notifications 实时通知并刷新未读数和通知列表。
+
+上述 S4-B 技术如果只安装依赖、使用静态假数据或做与业务无关 Demo，S4 PC 不判 PASS。
+
+S5 必须真实使用 HarmonyOS、ArkTS、ArkUI，并通过 HTTP REST 访问 Gateway，完成真实登录、巡检执行、异常上报、工单处理和 AI 结果查看。
 
 ## 16. S4 PC PASS
 
