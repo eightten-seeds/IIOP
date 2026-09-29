@@ -1,0 +1,1 @@
+package com.iiop.maintenance.mapper;import com.baomidou.mybatisplus.core.mapper.BaseMapper;import com.iiop.maintenance.domain.MaintenanceModels.Alarm;public interface AlarmMapper extends BaseMapper<Alarm>{}

@@ -1,0 +1,34 @@
+server:
+  port: 9202
+spring:
+  application:
+    name: iiop-device
+  cloud:
+    nacos:
+      discovery:
+        server-addr: ${NACOS_SERVER_ADDR:127.0.0.1:8848}
+        namespace: ${NACOS_NAMESPACE:}
+        group: ${NACOS_GROUP:IIOP_GROUP}
+  datasource:
+    url: ${MYSQL_DEVICE_URL:jdbc:mysql://127.0.0.1:3306/iiop_device?useUnicode=true&characterEncoding=utf8&serverTimezone=UTC&useSSL=false}
+    username: ${MYSQL_DEVICE_USERNAME}
+    password: ${MYSQL_DEVICE_PASSWORD}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  data:
+    redis:
+      host: ${REDIS_HOST:127.0.0.1}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+mybatis-plus:
+  global-config:
+    db-config:
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+  configuration:
+    map-underscore-to-camel-case: true
+sa-token:
+  token-name: satoken
+  timeout: 7200
+  active-timeout: 1800
+  is-log: false

@@ -1,0 +1,1 @@
+package com.iiop.inspection.mapper; import com.baomidou.mybatisplus.core.mapper.BaseMapper; import com.iiop.inspection.domain.InspectionModels.TemplateItem; public interface TemplateItemMapper extends BaseMapper<TemplateItem>{}

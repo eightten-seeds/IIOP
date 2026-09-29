@@ -1,0 +1,20 @@
+package com.iiop.maintenance.controller;
+import cn.dev33.satoken.annotation.SaCheckPermission;import com.iiop.common.api.*;import com.iiop.maintenance.domain.MaintenanceDtos.*;import com.iiop.maintenance.domain.MaintenanceModels.*;import com.iiop.maintenance.service.MaintenanceService;import org.springframework.web.bind.annotation.*;
+@RestController public class MaintenanceController {
+ private final MaintenanceService service;public MaintenanceController(MaintenanceService s){service=s;}
+ @SaCheckPermission("maintenance:view") @GetMapping("/api/maintenance/alarms") public Result<PageResult<Alarm>> alarms(@RequestParam(defaultValue="1")long pageNum,@RequestParam(defaultValue="20")long pageSize){return Result.success(service.alarms(pageNum,pageSize));}
+ @SaCheckPermission("maintenance:view") @GetMapping("/api/maintenance/alarms/{id}") public Result<Alarm> alarm(@PathVariable Long id){return Result.success(service.alarm(id));}
+ @SaCheckPermission("maintenance:alarm:process") @PostMapping("/api/maintenance/alarms/{id}/acknowledge") public Result<Alarm> acknowledge(@PathVariable Long id){return Result.success(service.alarmStatus(id,"acknowledge"));}
+ @SaCheckPermission("maintenance:alarm:process") @PostMapping("/api/maintenance/alarms/{id}/close") public Result<Alarm> close(@PathVariable Long id){return Result.success(service.alarmStatus(id,"close"));}
+ @SaCheckPermission("maintenance:view") @GetMapping("/api/maintenance/defects") public Result<PageResult<Defect>> defects(@RequestParam(defaultValue="1")long pageNum,@RequestParam(defaultValue="20")long pageSize){return Result.success(service.defects(pageNum,pageSize));}
+ @SaCheckPermission("maintenance:view") @GetMapping("/api/maintenance/defects/{id}") public Result<Defect> defect(@PathVariable Long id){return Result.success(service.defect(id));}
+ @SaCheckPermission("maintenance:defect:process") @PutMapping("/api/maintenance/defects/{id}/status") public Result<Defect> defectStatus(@PathVariable Long id,@RequestBody StatusRequest r){return Result.success(service.defectStatus(id,r));}
+ @SaCheckPermission("maintenance:view") @GetMapping("/api/maintenance/work-orders") public Result<PageResult<WorkOrder>> orders(@RequestParam(defaultValue="1")long pageNum,@RequestParam(defaultValue="20")long pageSize,@RequestParam(required=false)String status){return Result.success(service.orders(pageNum,pageSize,status));}
+ @SaCheckPermission("maintenance:view") @GetMapping("/api/maintenance/work-orders/{id}") public Result<WorkOrderDetail> detail(@PathVariable Long id){return Result.success(service.detail(id));}
+ @SaCheckPermission("maintenance:workorder:create") @PostMapping("/api/maintenance/work-orders") public Result<WorkOrder> create(@RequestBody WorkOrder v){return Result.success(service.create(v));}
+ @SaCheckPermission("maintenance:workorder:process") @PostMapping("/api/maintenance/work-orders/{id}/assign") public Result<WorkOrder> assign(@PathVariable Long id,@RequestBody AssignRequest r){return Result.success(service.assign(id,r));}
+ @SaCheckPermission("maintenance:workorder:process") @PostMapping("/api/maintenance/work-orders/{id}/start") public Result<WorkOrder> start(@PathVariable Long id,@RequestParam(required=false)String comment){return Result.success(service.start(id,comment));}
+ @SaCheckPermission("maintenance:workorder:process") @PostMapping("/api/maintenance/work-orders/{id}/repair-result") public Result<WorkOrder> repair(@PathVariable Long id,@RequestBody RepairRequest r){return Result.success(service.repair(id,r));}
+ @SaCheckPermission("maintenance:workorder:accept") @PostMapping("/api/maintenance/work-orders/{id}/acceptance") public Result<WorkOrder> accept(@PathVariable Long id,@RequestBody AcceptanceRequest r){return Result.success(service.accept(id,r));}
+ @GetMapping("/internal/maintenance/devices/{deviceId}/history") public Result<MaintenanceHistory> history(@PathVariable Long deviceId){return Result.success(service.history(deviceId));}
+}

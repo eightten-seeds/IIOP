@@ -1,0 +1,56 @@
+package com.iiop.inspection.service;
+
+import cn.dev33.satoken.stp.StpUtil;
+import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.baomidou.mybatisplus.core.toolkit.Wrappers;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.iiop.common.api.*;
+import com.iiop.common.exception.BizException;
+import com.iiop.common.mq.InspectionAbnormalEvent;
+import com.iiop.inspection.client.DeviceClient;
+import com.iiop.inspection.domain.InspectionDtos.*;
+import com.iiop.inspection.domain.InspectionModels.*;
+import com.iiop.inspection.mapper.*;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.*;
+import org.springframework.cloud.stream.function.StreamBridge;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+@Service
+public class InspectionService {
+    private static final Set<String> ITEM_TYPES=Set.of("NUMBER","BOOLEAN","TEXT","PHOTO"); private static final Set<String> SEVERITY=Set.of("LOW","MEDIUM","HIGH","CRITICAL");
+    private final TemplateMapper templates;private final TemplateItemMapper templateItems;private final PlanMapper plans;private final TaskMapper tasks;private final TaskItemMapper taskItems;private final AbnormalMapper abnormals;private final DeviceClient devices;private final StreamBridge stream;
+    public InspectionService(TemplateMapper templates,TemplateItemMapper templateItems,PlanMapper plans,TaskMapper tasks,TaskItemMapper taskItems,AbnormalMapper abnormals,DeviceClient devices,StreamBridge stream){this.templates=templates;this.templateItems=templateItems;this.plans=plans;this.tasks=tasks;this.taskItems=taskItems;this.abnormals=abnormals;this.devices=devices;this.stream=stream;}
+    public PageResult<Template> templates(long page,long size){IPage<Template> p=templates.selectPage(new Page<>(page,Math.min(size,100)),Wrappers.<Template>lambdaQuery().orderByDesc(Template::getCreatedAt));return page(p);}
+    public Template template(Long id){Template v=templates.selectById(id);if(v==null)throw notFound("巡检模板不存在");return v;}
+    @Transactional public Template saveTemplate(Template v,Long id){if(v.getVersion()==null)v.setVersion(1);if(v.getStatus()==null)v.setStatus("DRAFT");if(!Set.of("DRAFT","ENABLED","DISABLED").contains(v.getStatus()))throw bad("模板状态不正确");if(id==null)templates.insert(v);else{template(id);v.setId(id);templates.updateById(v);}return template(v.getId());}
+    @Transactional public void deleteTemplate(Long id){template(id);templates.deleteById(id);}
+    @Transactional public Template flow(Long id,FlowRequest value){Template t=template(id);t.setFlowDefinition(value.flowDefinition());templates.updateById(t);return t;}
+    public List<TemplateItem> templateItems(Long templateId){template(templateId);return templateItems.selectList(Wrappers.<TemplateItem>lambdaQuery().eq(TemplateItem::getTemplateId,templateId).orderByAsc(TemplateItem::getSortOrder));}
+    @Transactional public TemplateItem saveTemplateItem(Long templateId,TemplateItem v,Long id){template(templateId);if(!ITEM_TYPES.contains(v.getItemType()))throw bad("巡检项类型不正确");v.setTemplateId(templateId);if(v.getRequiredFlag()==null)v.setRequiredFlag(1);if(v.getSortOrder()==null)v.setSortOrder(0);if(id==null)templateItems.insert(v);else{requireTemplateItem(id);v.setId(id);templateItems.updateById(v);}return templateItems.selectById(v.getId());}
+    @Transactional public void deleteTemplateItem(Long id){requireTemplateItem(id);templateItems.deleteById(id);}
+    public PageResult<Plan> plans(long page,long size){IPage<Plan> p=plans.selectPage(new Page<>(page,Math.min(size,100)),Wrappers.<Plan>lambdaQuery().orderByDesc(Plan::getCreatedAt));return page(p);}
+    public Plan plan(Long id){Plan v=plans.selectById(id);if(v==null)throw notFound("巡检计划不存在");return v;}
+    @Transactional public Plan savePlan(Plan v,Long id){template(v.getTemplateId());deviceStatus(v.getDeviceId());if(!Set.of("DAILY","WEEKLY","MONTHLY","CRON").contains(v.getScheduleType()))throw bad("计划周期类型不正确");if(!Set.of("ENABLED","DISABLED").contains(v.getStatus()))throw bad("计划状态不正确");if(id==null)plans.insert(v);else{plan(id);v.setId(id);plans.updateById(v);}return plan(v.getId());}
+    @Transactional public void deletePlan(Long id){plan(id);plans.deleteById(id);}
+    @Transactional public Task generate(Long planId){Plan p=plan(planId);if(!"ENABLED".equals(p.getStatus()))throw conflict("只有启用计划可以生成任务");if("SCRAPPED".equals(deviceStatus(p.getDeviceId())))throw conflict("报废设备不能生成巡检任务");Template t=template(p.getTemplateId());if(!"ENABLED".equals(t.getStatus()))throw conflict("巡检模板未启用");List<TemplateItem> source=templateItems(p.getTemplateId());if(source.isEmpty())throw conflict("巡检模板没有检查项");Task task=new Task();task.setTaskCode(code("TASK"));task.setPlanId(p.getId());task.setDeviceId(p.getDeviceId());task.setTemplateId(p.getTemplateId());task.setAssigneeUserId(p.getAssigneeUserId());task.setTaskStatus("PENDING");task.setOverdueFlag(0);task.setResultStatus("UNKNOWN");task.setScheduledStartTime(LocalDateTime.now());task.setCompletionRate(BigDecimal.ZERO);tasks.insert(task);for(TemplateItem s:source){TaskItem i=new TaskItem();i.setTaskId(task.getId());i.setTemplateItemId(s.getId());i.setItemCode(s.getItemCode());i.setItemName(s.getItemName());i.setItemType(s.getItemType());i.setUnit(s.getUnit());i.setStandardValue(s.getStandardValue());i.setLowerLimit(s.getLowerLimit());i.setUpperLimit(s.getUpperLimit());i.setRequiredFlag(s.getRequiredFlag());i.setInspectionMethod(s.getInspectionMethod());i.setResultStatus("PENDING");i.setSortOrder(s.getSortOrder());taskItems.insert(i);}p.setLastGenerateTime(LocalDateTime.now());plans.updateById(p);return task;}
+    public PageResult<Task> tasks(long page,long size,String status){IPage<Task> p=tasks.selectPage(new Page<>(page,Math.min(size,100)),Wrappers.<Task>lambdaQuery().eq(status!=null,Task::getTaskStatus,status).orderByDesc(Task::getCreatedAt));return page(p);}
+    public TaskDetail taskDetail(Long id){Task t=task(id);return new TaskDetail(t,taskItems.selectList(Wrappers.<TaskItem>lambdaQuery().eq(TaskItem::getTaskId,id).orderByAsc(TaskItem::getSortOrder)),abnormals.selectList(Wrappers.<Abnormal>lambdaQuery().eq(Abnormal::getTaskId,id).orderByDesc(Abnormal::getReportedAt)));}
+    @Transactional public Task start(Long id){Task t=task(id);if(!"PENDING".equals(t.getTaskStatus()))throw conflict("任务不是待执行状态");t.setTaskStatus("IN_PROGRESS");t.setActualStartTime(LocalDateTime.now());tasks.updateById(t);return t;}
+    @Transactional public TaskItem submitItem(Long taskId,Long itemId,TaskItemSubmitRequest value){Task t=task(taskId);if(!"IN_PROGRESS".equals(t.getTaskStatus()))throw conflict("任务未开始");TaskItem item=requireTaskItem(itemId);if(!taskId.equals(item.getTaskId()))throw bad("任务项不属于当前任务");if(!Set.of("NORMAL","ABNORMAL").contains(value.resultStatus()))throw bad("任务项结果不正确");item.setActualValue(value.actualValue());item.setResultStatus(value.resultStatus());item.setRemark(value.remark());item.setEvidenceUrls(value.evidenceUrls());item.setCheckedAt(LocalDateTime.now());taskItems.updateById(item);updateCompletion(t);return item;}
+    @Transactional public Task complete(Long id){Task t=task(id);if(!"IN_PROGRESS".equals(t.getTaskStatus()))throw conflict("任务不是执行中状态");List<TaskItem> items=taskItems.selectList(Wrappers.<TaskItem>lambdaQuery().eq(TaskItem::getTaskId,id));if(items.stream().anyMatch(i->Integer.valueOf(1).equals(i.getRequiredFlag())&&"PENDING".equals(i.getResultStatus())))throw conflict("必填巡检项尚未提交");t.setTaskStatus("COMPLETED");t.setActualEndTime(LocalDateTime.now());t.setCompletionRate(new BigDecimal("100.00"));t.setResultStatus(items.stream().anyMatch(i->"ABNORMAL".equals(i.getResultStatus()))?"ABNORMAL":"NORMAL");tasks.updateById(t);return t;}
+    public PageResult<Abnormal> abnormals(long page,long size){IPage<Abnormal> p=abnormals.selectPage(new Page<>(page,Math.min(size,100)),Wrappers.<Abnormal>lambdaQuery().orderByDesc(Abnormal::getReportedAt));return page(p);}
+    public Abnormal abnormal(Long id){Abnormal v=abnormals.selectById(id);if(v==null)throw notFound("巡检异常不存在");return v;}
+    @Transactional public Abnormal createAbnormal(Abnormal v){Task t=task(v.getTaskId());if(v.getTaskItemId()!=null){TaskItem i=requireTaskItem(v.getTaskItemId());if(!v.getTaskId().equals(i.getTaskId()))throw bad("异常任务项不属于当前任务");}if(!SEVERITY.contains(v.getSeverity()))throw bad("异常等级不正确");v.setAbnormalCode(code("ABN"));v.setDeviceId(t.getDeviceId());v.setReportedBy(StpUtil.getLoginIdAsLong());v.setReportedAt(LocalDateTime.now());v.setStatus("OPEN");abnormals.insert(v);InspectionAbnormalEvent event=new InspectionAbnormalEvent(UUID.randomUUID().toString(),v.getId(),v.getDeviceId(),v.getSeverity(),v.getTitle(),v.getReportedAt());if(!stream.send("abnormal-out-0",event))throw new BizException(ErrorCode.SERVICE_UNAVAILABLE,"巡检异常事件发送失败");return v;}
+    public RecentHistory recent(Long deviceId){return new RecentHistory(deviceId,tasks.selectList(Wrappers.<Task>lambdaQuery().eq(Task::getDeviceId,deviceId).orderByDesc(Task::getCreatedAt).last("LIMIT 10")),abnormals.selectList(Wrappers.<Abnormal>lambdaQuery().eq(Abnormal::getDeviceId,deviceId).orderByDesc(Abnormal::getReportedAt).last("LIMIT 10")));}
+    private String deviceStatus(Long id){Result<Map<String,Object>> result=devices.context(id);if(result==null||result.code()!=0||result.data()==null)throw notFound("设备不存在");Object raw=result.data().get("device");if(!(raw instanceof Map<?,?> map))throw new BizException(ErrorCode.SERVICE_UNAVAILABLE,"设备上下文不可用");return String.valueOf(map.get("status"));}
+    private void updateCompletion(Task t){long total=taskItems.selectCount(Wrappers.<TaskItem>lambdaQuery().eq(TaskItem::getTaskId,t.getId()));long done=taskItems.selectCount(Wrappers.<TaskItem>lambdaQuery().eq(TaskItem::getTaskId,t.getId()).ne(TaskItem::getResultStatus,"PENDING"));t.setCompletionRate(total==0?BigDecimal.ZERO:BigDecimal.valueOf(done*100d/total).setScale(2,RoundingMode.HALF_UP));tasks.updateById(t);}
+    private Task task(Long id){Task v=tasks.selectById(id);if(v==null)throw notFound("巡检任务不存在");return v;}private TemplateItem requireTemplateItem(Long id){TemplateItem v=templateItems.selectById(id);if(v==null)throw notFound("模板项不存在");return v;}private TaskItem requireTaskItem(Long id){TaskItem v=taskItems.selectById(id);if(v==null)throw notFound("任务项不存在");return v;}
+    private static String code(String p){return p+LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmmssSSS"))+UUID.randomUUID().toString().substring(0,4).toUpperCase();}
+    private static BizException bad(String m){return new BizException(ErrorCode.BAD_REQUEST,m);}private static BizException notFound(String m){return new BizException(ErrorCode.NOT_FOUND,m);}private static BizException conflict(String m){return new BizException(ErrorCode.CONFLICT,m);}
+    private static <T> PageResult<T> page(IPage<T> p){return new PageResult<>(p.getCurrent(),p.getSize(),p.getTotal(),p.getRecords());}
+}

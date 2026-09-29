@@ -1,0 +1,46 @@
+server:
+  port: 9203
+spring:
+  application:
+    name: iiop-inspection
+  cloud:
+    nacos:
+      discovery:
+        server-addr: ${NACOS_SERVER_ADDR:127.0.0.1:8848}
+        namespace: ${NACOS_NAMESPACE:}
+        group: ${NACOS_GROUP:IIOP_GROUP}
+    stream:
+      rocketmq:
+        binder:
+          name-server: ${ROCKETMQ_NAME_SERVER:127.0.0.1:9876}
+        bindings:
+          abnormal-out-0:
+            producer:
+              group: iiop-inspection-producer
+      bindings:
+        abnormal-out-0:
+          destination: iiop_inspection_abnormal
+          content-type: application/json
+  datasource:
+    url: ${MYSQL_INSPECTION_URL:jdbc:mysql://127.0.0.1:3306/iiop_inspection?useUnicode=true&characterEncoding=utf8&serverTimezone=UTC&useSSL=false}
+    username: ${MYSQL_INSPECTION_USERNAME}
+    password: ${MYSQL_INSPECTION_PASSWORD}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  data:
+    redis:
+      host: ${REDIS_HOST:127.0.0.1}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+mybatis-plus:
+  global-config:
+    db-config:
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+  configuration:
+    map-underscore-to-camel-case: true
+sa-token:
+  token-name: satoken
+  timeout: 7200
+  active-timeout: 1800
+  is-log: false

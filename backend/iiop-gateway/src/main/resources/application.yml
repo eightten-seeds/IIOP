@@ -27,6 +27,18 @@ spring:
               uri: lb:ws://iiop-auth
               predicates:
                 - Path=/ws/**
+            - id: device-api
+              uri: lb://iiop-device
+              predicates:
+                - Path=/api/device/**
+            - id: inspection-api
+              uri: lb://iiop-inspection
+              predicates:
+                - Path=/api/inspection/**
+            - id: maintenance-api
+              uri: lb://iiop-maintenance
+              predicates:
+                - Path=/api/maintenance/**
           globalcors:
             cors-configurations:
               '[/**]':
