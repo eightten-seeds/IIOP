@@ -147,7 +147,7 @@ Nacos Config 不是必做验收项。已有配置接入若稳定可保留，不�
 
 创建 abnormal 后发送：
 
-destination：`iiop.inspection.abnormal`
+destination：`iiop_inspection_abnormal`
 
 事件只需要：
 
@@ -171,7 +171,7 @@ destination：`iiop.inspection.abnormal`
 - maintenance record
 - acceptance
 
-消费 `iiop.inspection.abnormal`：
+消费 `iiop_inspection_abnormal`：
 
 - 同一 abnormalId 不重复创建 defect
 - 创建成功即可
@@ -184,7 +184,7 @@ AI 结果由前端调用 ai 服务查看，工单若需要 diagnosisId，可以�
 
 第一版只保留一个 Topic：
 
-`iiop.inspection.abnormal`
+`iiop_inspection_abnormal`
 
 生产者：
 

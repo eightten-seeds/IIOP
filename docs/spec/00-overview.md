@@ -123,7 +123,7 @@ PC：
 
 只要求一个真实异步业务链：
 
-`iiop.inspection.abnormal`
+`iiop_inspection_abnormal`
 
 inspection 发布巡检异常事件，maintenance 消费并创建或关联缺陷。
 

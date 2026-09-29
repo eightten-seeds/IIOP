@@ -935,7 +935,7 @@ NUMBER 类型允许设置上下限。
 业务规则：
 
 - 新建异常状态为 OPEN；
-- 创建后发布 `iiop.inspection.abnormal` 事件；
+- 创建后发布 `iiop_inspection_abnormal` 事件；
 - maintenance 和 ai 服务通过事件处理后续业务；
 - inspection 不直接写 maintenance 或 ai 数据库。
 
