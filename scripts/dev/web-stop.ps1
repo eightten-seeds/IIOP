@@ -1,0 +1,1 @@
+$state='E:\IIOP-data\dev\web';$pidFile="$state\dev.pid";if(!(Test-Path $pidFile)){'dev not started';exit 0};$id=[int](Get-Content $pidFile);$p=Get-Process -Id $id -ErrorAction SilentlyContinue;if($p){Stop-Process -Id $id -Force;'dev stopped'}else{'dev already stopped'};Remove-Item $pidFile -Force

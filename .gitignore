@@ -29,6 +29,7 @@ npm-debug.log*
 application-local.*
 application-*.local.*
 !application-local.example.yml
+scripts/dev/local-secrets.ps1
 
 # Runtime data and uploads
 logs/

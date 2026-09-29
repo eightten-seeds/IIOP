@@ -1,0 +1,3 @@
+import axios from 'axios'; import { ElMessage } from 'element-plus'; import { useAuthStore } from '../stores/auth';
+export const request=axios.create({baseURL:import.meta.env.VITE_GATEWAY_URL||'http://127.0.0.1:8080',timeout:20000});
+request.interceptors.request.use(c=>{const s=useAuthStore();if(s.token)c.headers.satoken=s.token;return c}); request.interceptors.response.use(r=>{const b=r.data;if(b?.code===0)return b.data;ElMessage.error(b?.message||'请求失败');return Promise.reject(b)},e=>{const s=useAuthStore();if(e.response?.status===401){s.logoutLocal();location.hash='#/login'}else ElMessage.error(e.response?.data?.message||'网络请求失败');return Promise.reject(e)});

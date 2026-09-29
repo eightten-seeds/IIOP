@@ -1,0 +1,7 @@
+<script setup lang="ts">
+import {onMounted,ref}from'vue';import{request}from'../api/request';import{useRoute}from'vue-router';import{ElMessage}from'element-plus';import{useAuthStore}from'../stores/auth'
+const route=useRoute(),auth=useAuthStore(),d=ref<any>(),items=ref<any[]>([]),flow=ref(''),saving=ref(false)
+async function load(){d.value=await request.get('/api/inspection/templates/'+route.params.id);items.value=await request.get('/api/inspection/templates/'+route.params.id+'/items');flow.value=d.value.flowDefinition||''}
+async function save(){saving.value=true;try{await request.put('/api/inspection/templates/'+route.params.id+'/flow-definition',{flowDefinition:flow.value});ElMessage.success('流程定义已保存')}finally{saving.value=false}}
+onMounted(load)
+</script><template><section><h1>巡检模板详情</h1><el-card v-loading="!d"><el-descriptions v-if="d" :column="2"><el-descriptions-item label="名称">{{d.templateName}}</el-descriptions-item><el-descriptions-item label="状态">{{d.status}}</el-descriptions-item></el-descriptions><h3>检查项</h3><el-table :data="items"><el-table-column prop="itemName" label="检查项"/><el-table-column prop="itemType" label="类型"/><el-table-column prop="standardValue" label="标准值"/></el-table><h3>flow_definition</h3><el-input v-model="flow" type="textarea" :rows="8" :disabled="!auth.can('inspection:template:manage')"/><el-button v-if="auth.can('inspection:template:manage')" :loading="saving" @click="save">保存</el-button></el-card></section></template>

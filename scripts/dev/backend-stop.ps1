@@ -1,0 +1,3 @@
+$state='E:\IIOP-data\dev\backend';$services='gateway','auth','device','inspection','maintenance','ai'
+function Stop-ProcessTree([int]$Id){Get-CimInstance Win32_Process -Filter "ParentProcessId=$Id" -ErrorAction SilentlyContinue|ForEach-Object{Stop-ProcessTree $_.ProcessId};Stop-Process -Id $Id -Force -ErrorAction SilentlyContinue}
+foreach($service in $services){$pidFile=Join-Path $state "$service.pid";if(!(Test-Path $pidFile)){Write-Output "${service}: not started";continue};$id=[int](Get-Content -LiteralPath $pidFile);$process=Get-Process -Id $id -ErrorAction SilentlyContinue;if($process){Stop-ProcessTree $id;Write-Output "${service}: stopped"}else{Write-Output "${service}: already stopped"};Remove-Item -LiteralPath $pidFile -Force}

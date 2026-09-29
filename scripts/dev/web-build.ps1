@@ -1,0 +1,3 @@
+$ErrorActionPreference='Stop';$web='E:\IIOP\frontend\iiop-web';$state='E:\IIOP-data\dev\web';New-Item -ItemType Directory -Force -Path $state|Out-Null;$pidFile="$state\build.pid";$exitFile="$state\build.exit"
+if(Test-Path $pidFile){$old=[int](Get-Content $pidFile);if(Get-Process -Id $old -ErrorAction SilentlyContinue){'build already running';exit 0}};Remove-Item $exitFile -Force -ErrorAction SilentlyContinue
+$cmd="Set-Location '$web'; npm run build *> '$state\build.log'; `$LASTEXITCODE | Set-Content '$exitFile'";$p=Start-Process powershell.exe -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-Command',$cmd -PassThru -WindowStyle Hidden;$p.Id|Set-Content $pidFile;"build started: $($p.Id)"
