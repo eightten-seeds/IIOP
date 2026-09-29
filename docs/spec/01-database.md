@@ -1639,7 +1639,10 @@ ADMIN：
 - 拥有 system:user:view、system:user:create、system:user:update、system:user:role；
 - 拥有 system:role:view、system:permission:view；
 - 不拥有 system:user:delete、system:role:create/update/delete/permission、system:permission:create/update/delete；
-- 业务管理员可以维护日常业务人员和分配已有角色，但不能改变平台权限模型。
+- 业务管理员可以维护日常业务人员并分配已有的 ADMIN / INSPECTOR / MAINTAINER 角色，但不能授予或移除 SUPER_ADMIN；
+- 只有拥有 system:role:permission 的超级管理员级用户可以授予或移除 SUPER_ADMIN；
+- 该限制必须由 iiop-auth 后端强制执行，不能只依赖前端隐藏；
+- 业务管理员不能改变平台权限模型。
 
 INSPECTOR：
 
