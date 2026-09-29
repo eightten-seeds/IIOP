@@ -132,7 +132,7 @@ S3 最终运行修复基线：
 
 状态：进行中。
 
-S4 仍算一个阶段，为降低返工拆成两轮。
+S4 仍算一个阶段。S4-A 内部设置三个质量 Gate，S4-B 完成指定可视化技术和视觉强化。
 
 ### S4-A PC Core
 
@@ -161,7 +161,33 @@ S4 仍算一个阶段，为降低返工拆成两轮。
 
 核心业务必须使用独立 URL，不允许把全部功能放进一个 Dashboard。
 
-详细页面与视觉要求以 docs/spec/03-client.md 为准。
+S4-A 内部验收：
+
+Gate 1：
+- Auth / roles / permissions
+- 四角色默认落地
+- Router Guard / 403
+- RBAC 菜单与关键按钮
+- AdminLayout / Breadcrumb
+- 中文化与公共交互反馈
+
+Gate 2：
+- 业务专用页面
+- 状态驱动操作
+- 用户角色分配
+- 角色权限展示/轻量编辑
+- 真实关联导航
+- 写操作反馈闭环
+
+Gate 3：
+- SUPER_ADMIN / ADMIN / INSPECTOR / MAINTAINER 四角色真实运行
+- 完整业务主链
+- 详情刷新与浏览器前进后退
+- 最终 build 与 Secret 检查
+
+每个 Gate Codex push 后都由 ChatGPT 独立检查 GitHub；前一 Gate 未 PASS 不进入下一 Gate。
+
+详细页面、角色与交互要求以 docs/spec/03-client.md 为准。
 
 ### S4-B Visualization & Polish
 
@@ -175,7 +201,7 @@ S4 仍算一个阶段，为降低返工拆成两轮。
 - 登录页视觉
 - 页面统一视觉
 - 响应式修整
-- loading / empty / error / success feedback
+- 对 S4-A 已实现的 loading / empty / error / success feedback 做视觉统一
 
 S4-B 不扩张业务范围。
 
@@ -189,9 +215,14 @@ S4-B 不扩张业务范围。
 - Three.js 可交互并绑定真实设备
 - Vue Flow 可保存回显真实 flow_definition
 - WebSocket 可收到通知
+- ECharts 使用真实业务统计数据
+- Three.js 使用真实设备坐标/状态/风险
+- Vue Flow 保存并回显真实 flow_definition
 - 关键页面具有答辩演示级视觉完成度
 
 ## 6. S5 HarmonyOS
+
+S5 必须真实使用 HarmonyOS + ArkTS + ArkUI，并通过 HTTP REST 访问 Gateway。
 
 一轮完成核心移动流程：
 
@@ -310,4 +341,4 @@ S4-A：当前阶段
 
 当前：
 
-**S4-A PC Core**
+**S4-A 角色/权限与交互基线校正 → Gate 1。**
