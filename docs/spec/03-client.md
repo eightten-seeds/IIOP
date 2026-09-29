@@ -402,7 +402,8 @@ AI 只能提供诊断和工单草案建议，前端不得把 AI 结果表现成�
 - 角色分配
 - 角色分配调用现有用户角色 API
 - ADMIN 只能分配 ADMIN / INSPECTOR / MAINTAINER
-- SUPER_ADMIN 的授予或移除必须由后端强制要求 system:role:permission，不能只依赖前端隐藏
+- ADMIN 不能禁用或锁定当前具有 SUPER_ADMIN 的账号
+- SUPER_ADMIN 的授予、移除，以及 SUPER_ADMIN 账号状态变更必须由后端强制要求 system:role:permission，不能只依赖前端隐藏
 - 用户状态修改调用后端专用 status API，不能把 status 塞进普通用户编辑 DTO
 
 ### /system/roles
