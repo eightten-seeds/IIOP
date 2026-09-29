@@ -147,15 +147,24 @@ inspection 发布巡检异常事件，maintenance 消费并创建或关联缺陷
 
 使用 Sa-Token + Redis。
 
+固定业务角色：
+
+- SUPER_ADMIN：超级管理员，负责系统治理和全部业务。
+- ADMIN：业务管理员，负责设备、巡检、维修、AI 等业务管理，可进行必要的用户分配管理，但不拥有最高级角色/权限治理能力。
+- INSPECTOR：巡检人员，面向现场巡检执行、异常上报和 AI 辅助诊断。
+- MAINTAINER：维修人员，面向缺陷、维修工单、维修记录和 AI 辅助诊断。
+
 要求：
 
 - 登录
 - 退出
 - 当前用户
+- 返回 roles + permissions
 - RBAC 权限
 - BCrypt 密码
 - 未登录返回 401
 - 无权限返回 403
+- PC 根据角色形成工作视角，根据 permissions 做最终授权判断
 
 Gateway 是客户端统一入口。
 
@@ -315,15 +324,14 @@ PC 只实现能完成管理和答辩演示的核心页面：
 
 ## 15. 当前状态
 
-已完成：
+- S1 基础设施：PASS
+- S2-A common + auth + gateway：PASS
+- S2-B device + inspection + maintenance + RocketMQ/WebSocket/Sentinel：PASS
+- S3 DeepSeek + LangChain4j + LangGraph4j：PASS
+- S4 PC Web：进行中
+- S5 HarmonyOS：未开始
+- S6 联调、演示、冻结和答辩材料：未开始
 
-- M0 / G0
-- 数据库 SQL
-- S1 基础设施
-- S2-A common + auth + gateway 实现
+当前工作：
 
-根据最新“最小实现”原则，S2-A 不再因为 Same-Token 或完整 Nacos Config 治理要求返工。
-
-当前进入：
-
-**S2-B：device + inspection + maintenance + 最小 RocketMQ/WebSocket/Sentinel 闭环。**
+**S4-A PC Core。先校正角色/权限与交互基线，再按 Gate 1、Gate 2、Gate 3 逐关验收。**
