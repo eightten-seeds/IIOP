@@ -67,14 +67,16 @@ AI：
 
 已完成：
 
-- 工程与规范
-- 5 个数据库 / 25 张表
-- 本地基础设施
-- common + auth + gateway
+- S1 基础设施
+- S2-A common + auth + gateway
+- S2-B device + inspection + maintenance + RocketMQ/WebSocket/Sentinel
+- S3 DeepSeek + LangChain4j + LangGraph4j
 
 当前执行：
 
-**S2-B：device + inspection + maintenance + 最小 RocketMQ/WebSocket/Sentinel 闭环。**
+**S4-A PC Core：角色/权限与交互基线校正，随后按 Gate 1、Gate 2、Gate 3 逐关验收。**
+
+S4-B 将完成 ECharts、Three.js、Vue Flow 与 PC WebSocket 的真实业务接入；S5 完成 HarmonyOS / ArkTS / ArkUI 现场端。
 
 完整实施顺序见：
 
