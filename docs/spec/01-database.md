@@ -1626,14 +1626,20 @@ M1 固定插入以下权限编码。后端注解、PC 路由和按钮、HarmonyO
 
 ### 预置角色的基础授权
 
+角色用于形成岗位工作视角，真正的接口和按钮授权仍以 permission code 为准。前端不得用角色名硬编码绕过权限检查。
+
 SUPER_ADMIN：
 
-- 拥有全部权限。
+- 拥有全部 33 个固定权限；
+- 负责系统级用户、角色、权限治理以及全部业务操作。
 
 ADMIN：
 
-- 拥有全部业务域权限；
-- 拥有用户、角色和权限管理能力。
+- 拥有 dashboard、device、inspection、maintenance、ai 全部业务域权限；
+- 拥有 system:user:view、system:user:create、system:user:update、system:user:role；
+- 拥有 system:role:view、system:permission:view；
+- 不拥有 system:user:delete、system:role:create/update/delete/permission、system:permission:create/update/delete；
+- 业务管理员可以维护日常业务人员和分配已有角色，但不能改变平台权限模型。
 
 INSPECTOR：
 
@@ -1646,16 +1652,22 @@ INSPECTOR：
 
 MAINTAINER：
 
+- dashboard:view
 - device:view
 - maintenance:view
 - maintenance:alarm:process
 - maintenance:defect:process
 - maintenance:workorder:create
 - maintenance:workorder:process
-- maintenance:workorder:accept
 - ai:view
 - ai:diagnosis
 - ai:confirm
+
+验收职责：
+
+- maintenance:workorder:accept 仅授予 SUPER_ADMIN 与 ADMIN，用于体现维修处理与验收职责分离；
+- MAINTAINER 负责维修处理，不验收自己处理的工单；
+- inspection:abnormal:process 保留为固定权限码，只有后端存在对应处理动作时前端才显示操作，不能为了使用权限码虚构接口。
 
 06_seed_data.sql 应同时插入角色、权限以及上述角色权限关系。SUPER_ADMIN 的全部权限关系必须来自 sys_role_permission，不通过“角色名硬编码绕过 RBAC”。
 
