@@ -174,7 +174,7 @@ Gate 1：
 Gate 2：
 - 业务专用页面
 - 状态驱动操作
-- 用户角色分配
+- 用户角色分配，ADMIN 不得授予或移除 SUPER_ADMIN
 - 角色权限展示/轻量编辑
 - 真实关联导航
 - 写操作反馈闭环
@@ -231,7 +231,7 @@ S5 必须真实使用 HarmonyOS + ArkTS + ArkUI，并通过 HTTP REST 访问 Gat
 - 巡检执行
 - 异常上报
 - 我的工单
-- 工单处理
+- 工单处理至 WAITING_ACCEPTANCE
 - AI 结果
 
 不做：
@@ -247,7 +247,7 @@ S5 必须真实使用 HarmonyOS + ArkTS + ArkUI，并通过 HTTP REST 访问 Gat
 - 能登录
 - 能完成巡检
 - 能上报异常
-- 能处理工单
+- 能处理工单并提交维修结果至待验收状态
 - 能查看 AI
 
 ## 7. S6 联调、演示、冻结和答辩
