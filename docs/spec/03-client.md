@@ -434,6 +434,61 @@ Pinia 只保存必要全局状态：
 
 在这些尺寸下不得出现明显布局断裂、主内容被遮挡或关键操作不可见。
 
+## 14.1 界面语言与字段显示
+
+PC 端面向用户的界面文本默认使用中文，答辩演示页面不得大量直接暴露后端英文字段名、枚举值或组件默认英文文案。
+
+必须中文化：
+
+- Sidebar 菜单
+- Breadcrumb
+- 页面标题
+- 表格列名
+- 表单标签
+- 筛选项
+- 按钮
+- 对话框
+- 空状态
+- loading / error / success 提示
+- 状态与风险等级的主要显示文本
+
+后端字段名只用于代码和接口映射，例如 `deviceName`、`riskLevel`、`possibleCauses`，页面应显示“设备名称”“风险等级”“可能原因”等中文业务名称。
+
+后端枚举值保持原始值传输，不修改 API 语义，但前端必须建立集中或可复用的显示映射。例如：
+
+- ONLINE → 在线
+- OFFLINE → 离线
+- FAULT → 故障
+- MAINTENANCE → 维护中
+- LOW → 低
+- MEDIUM → 中
+- HIGH → 高
+- CRITICAL → 严重
+- PENDING → 待处理
+- RUNNING / IN_PROGRESS / PROCESSING → 进行中
+- COMPLETED / SUCCEEDED → 已完成 / 成功
+- FAILED → 失败
+- CONFIRMED → 已确认
+- REJECTED → 已拒绝
+
+实际中文文案需结合具体业务上下文，不能机械地对所有不同状态复用错误翻译。
+
+允许保留常用技术缩写与标识：
+
+- IIOP
+- AI
+- SOP
+- ID
+- CRON
+- API
+- WebSocket
+- Three.js
+- Vue Flow
+
+AI 五节点页面应以中文节点名称作为主要展示，同时可以保留固定 nodeCode 作为次级技术信息，便于答辩说明 LangGraph4j 真实节点。
+
+S4-A Gate 1 及后续运行验收时，如果核心页面仍大量显示原始英文字段名、默认英文按钮、英文枚举值或未翻译组件文案，不判定为可验收完成。
+
 ## 15. S4 分阶段
 
 S4 仍然是一个 PC Web 阶段，为降低返工允许拆成两轮。
