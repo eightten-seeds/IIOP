@@ -1,0 +1,12 @@
+spring:
+  datasource:
+    url: jdbc:mysql://127.0.0.1:3306/iiop_ai?useUnicode=true&characterEncoding=utf8&serverTimezone=UTC&useSSL=false
+    username: YOUR_MYSQL_USERNAME
+    password: YOUR_MYSQL_PASSWORD
+
+iiop:
+  ai:
+    deepseek:
+      api-key: YOUR_DEEPSEEK_API_KEY
+      base-url: https://api.deepseek.com/v1
+      model: deepseek-flash
