@@ -24,6 +24,8 @@
         <spring-cloud-alibaba.version>2025.0.0.0</spring-cloud-alibaba.version>
         <mybatis-plus.version>3.5.17</mybatis-plus.version>
         <sa-token.version>1.46.0</sa-token.version>
+        <langchain4j.version>1.20.2</langchain4j.version>
+        <langgraph4j.version>1.9.2</langgraph4j.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
     </properties>

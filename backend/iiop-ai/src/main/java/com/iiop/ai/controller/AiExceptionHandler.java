@@ -1,0 +1,3 @@
+package com.iiop.ai.controller;
+import com.iiop.common.api.*;import com.iiop.common.exception.BizException;import com.iiop.common.trace.TraceContext;import org.springframework.web.bind.annotation.*;
+@RestControllerAdvice public class AiExceptionHandler {@ExceptionHandler(BizException.class) public Result<Void> biz(BizException e){return new Result<>(e.getErrorCode().getCode(),e.getMessage(),null,TraceContext.currentTraceId());}@ExceptionHandler(Exception.class) public Result<Void> error(Exception e){return new Result<>(ErrorCode.INTERNAL_ERROR.getCode(),"系统内部错误",null,TraceContext.currentTraceId());}}

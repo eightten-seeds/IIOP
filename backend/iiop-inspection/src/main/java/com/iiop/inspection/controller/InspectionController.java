@@ -36,4 +36,5 @@ public class InspectionController {
     @SaCheckPermission("inspection:view") @GetMapping("/api/inspection/abnormals/{id}") public Result<Abnormal> abnormal(@PathVariable Long id){return Result.success(service.abnormal(id));}
     @SaCheckPermission("inspection:execute") @PostMapping("/api/inspection/abnormals") public Result<Abnormal> createAbnormal(@RequestBody Abnormal v){return Result.success(service.createAbnormal(v));}
     @GetMapping("/internal/inspection/devices/{deviceId}/recent-history") public Result<RecentHistory> recent(@PathVariable Long deviceId){return Result.success(service.recent(deviceId));}
+    @GetMapping("/internal/inspection/abnormals/{id}") public Result<Abnormal> internalAbnormal(@PathVariable Long id){return Result.success(service.abnormal(id));}
 }

@@ -1,0 +1,35 @@
+server:
+  port: 9205
+spring:
+  application:
+    name: iiop-ai
+  cloud:
+    nacos:
+      discovery:
+        server-addr: ${NACOS_SERVER_ADDR:127.0.0.1:8848}
+        namespace: ${NACOS_NAMESPACE:}
+        group: ${NACOS_GROUP:IIOP_GROUP}
+  datasource:
+    url: ${MYSQL_AI_URL:jdbc:mysql://127.0.0.1:3306/iiop_ai?useUnicode=true&characterEncoding=utf8&serverTimezone=UTC&useSSL=false}
+    username: ${MYSQL_AI_USERNAME}
+    password: ${MYSQL_AI_PASSWORD}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  data:
+    redis:
+      host: ${REDIS_HOST:127.0.0.1}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+sa-token:
+  token-name: satoken
+  timeout: 7200
+  active-timeout: 1800
+  is-log: false
+iiop:
+  ai:
+    deepseek:
+      api-key: ${DEEPSEEK_API_KEY:}
+      base-url: ${DEEPSEEK_BASE_URL:https://api.deepseek.com/v1}
+      model: ${DEEPSEEK_MODEL:deepseek-flash}

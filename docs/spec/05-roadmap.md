@@ -104,7 +104,7 @@ maintenance：
 - WebSocket 能收到一条真实通知
 - Sentinel 能触发一次 429
 
-S2-B 完成后直接进入 S3。
+S2-B 状态：PASS。
 
 ## 4. S3 AI
 
@@ -283,11 +283,10 @@ Codex 不得自行进入下一阶段。
 
 ## 10. 当前阶段
 
-S1：PASS  
+S1：PASS
 S2-A：PASS
+S2-B：PASS；当前阶段为 S3（AI 结构化诊断）。
 
 当前：
 
-**S2-B 业务后端 + 最小中间件闭环**
-
-S2-B 完成后进入 S3 AI。
+**S3 AI**

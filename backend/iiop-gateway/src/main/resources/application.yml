@@ -39,6 +39,10 @@ spring:
               uri: lb://iiop-maintenance
               predicates:
                 - Path=/api/maintenance/**
+            - id: ai-api
+              uri: lb://iiop-ai
+              predicates:
+                - Path=/api/ai/**
           globalcors:
             cors-configurations:
               '[/**]':

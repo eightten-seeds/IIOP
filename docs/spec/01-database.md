@@ -936,7 +936,7 @@ NUMBER 类型允许设置上下限。
 
 - 新建异常状态为 OPEN；
 - 创建后发布 `iiop_inspection_abnormal` 事件；
-- maintenance 和 ai 服务通过事件处理后续业务；
+- maintenance 通过 `iiop_inspection_abnormal` 事件创建 defect；ai 不消费 MQ，AI 诊断由 HTTP 主动发起；
 - inspection 不直接写 maintenance 或 ai 数据库。
 
 ---
@@ -1061,8 +1061,8 @@ NUMBER 类型允许设置上下限。
 
 业务规则：
 
-- 巡检异常事件创建 defect 后，后续 AI_DIAGNOSIS_SUCCEEDED 事件可把对应 diagnosisId 关联到 ai_diagnosis_id；
-- maintenance 不同步调用 ai；
+- 不存在 AI MQ；AI confirm/reject 不自动写 maintenance；ai_diagnosis_id 保留为可选业务关联字段；
+- maintenance 不同步调用 ai；创建工单时如已有 diagnosisId，可由正常业务请求关联；
 - 从 defect 创建工单时，如果 ai_diagnosis_id 已存在，则默认复制到 mt_work_order.ai_diagnosis_id；
 - MANUAL defect 的 source_id 可以为空。
 
