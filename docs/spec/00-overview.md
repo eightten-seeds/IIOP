@@ -152,8 +152,8 @@ inspection 发布巡检异常事件，maintenance 消费并创建或关联缺陷
 
 固定业务角色：
 
-- SUPER_ADMIN：超级管理员，负责系统治理和全部业务。
-- ADMIN：业务管理员，负责设备、巡检、维修、AI 等业务管理，可管理日常用户并分配已有的非 SUPER_ADMIN 角色，但不拥有最高级角色/权限治理能力。
+- SUPER_ADMIN：超级管理员，负责系统治理、全业务查看和 ADMIN 级管理兜底；现场巡检/维修执行仍遵守 INSPECTOR / MAINTAINER + assignee 约束。
+- ADMIN：业务管理员，负责设备、巡检、维修、AI 等业务管理，可管理日常用户并在四个固定角色内分配岗位，但不能授予或移除 SUPER_ADMIN，也不能改变冻结角色/权限矩阵。
 - INSPECTOR：巡检人员，面向现场巡检执行、异常上报和 AI 辅助诊断。
 - MAINTAINER：维修人员，面向缺陷、维修工单、维修记录和 AI 辅助诊断。
 
@@ -174,6 +174,10 @@ Gateway 是客户端统一入口。
 第一版不再要求额外 Same-Token 微服务来源认证体系。已有内部接口只要不通过 Gateway 暴露即可。
 
 权限码保持 `01-database.md` 中现有 33 个，不新增。
+
+第一版运行时同时冻结四个业务角色、33 个 permission code 和 seed/spec 定义的角色权限矩阵。角色/权限页面只读；公开业务 API 不提供创建/删除角色、创建/删除 permission 或修改固定角色权限矩阵的可操作能力。现有相关表、permission code 和历史 CRUD 代码可以保留，用于保持数据库/代码基线稳定，但不构成第一版动态 RBAC 产品能力。
+
+`system:role:permission` 第一版保留实际用途，用于 SUPER_ADMIN 角色授予/移除及对应保护校验，不用于动态改写固定角色权限矩阵。
 
 ## 7. 设备域
 
@@ -205,7 +209,7 @@ Three.js 直接使用设备表已有 model_url 和 position_x/y/z。
 
 巡检异常创建后发送一条 RocketMQ 事件给 maintenance。
 
-PHOTO/附件不是主线阻塞项。若时间允许再做简单本地上传；没有附件也不能阻塞巡检主链。
+PHOTO 第一版不实现真实图片上传，也不提供假的上传流程。模板编辑器不允许新增 PHOTO 检查项；历史 required PHOTO 项按 `06-role-usecases.md` 提示管理员先调整模板。
 
 ## 9. 维修域
 
@@ -246,7 +250,8 @@ LOAD_CONTEXT
 - 保存 ai_diagnosis
 - 保存 ai_workflow_trace
 - 输出结构化 JSON
-- HIGH/CRITICAL 需要人工确认
+- HIGH/CRITICAL 显示强化人工确认要求
+- 任何要使用 AI WorkOrderDraft 创建真实工单的诊断都必须先达到 SUCCEEDED + CONFIRMED
 - AI 不直接控制设备
 - AI 不自动创建真实工单
 

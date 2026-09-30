@@ -66,7 +66,7 @@ Gateway 只做：
 
 ## 5. Auth
 
-> S4 起所有角色数据范围、岗位动作约束和 Gate 2 最小 API 补充，以 `06-role-usecases.md` 为准。现有用户/角色/权限 CRUD 技术能力可保留，但第一版正式业务 Actor 固定为四种预置角色，PC 不提供创建第五种业务角色或新 permission 的产品流程。
+> S4 起所有角色数据范围、岗位动作约束和 Gate 2 最小 API 补充，以 `06-role-usecases.md` 为准。第一版正式业务 Actor 固定为四种预置角色，33 个 permission code 与 seed/spec 角色权限矩阵运行时冻结。
 
 实现：
 
@@ -74,17 +74,25 @@ Gateway 只做：
 - logout
 - me
 - 用户 CRUD
-- 角色 CRUD
-- 用户角色
-- 角色权限
-- 权限查询
+- 用户四角色分配
+- 角色/权限只读查询
+- SUPER_ADMIN 授予/移除及账号状态保护
 - 通知列表/未读/已读
 - BCrypt
 - Sa-Token + Redis
 
-权限码直接使用现有数据库 seed。
+Gate 2 约束：
 
-不新增第二套认证机制。
+- permissions 只由 ENABLED 角色贡献；
+- 用户角色分配只允许四个固定 roleCode；
+- ADMIN 不能授予/移除 SUPER_ADMIN；
+- 当前 SUPER_ADMIN 不能移除自己的 SUPER_ADMIN、禁用/锁定/删除自己；
+- 公开业务 API 不允许创建/删除角色、创建/删除 permission 或修改固定角色权限矩阵；
+- `system:role:permission` 用于 SUPER_ADMIN 角色授予/移除及保护校验，不用于动态改写固定矩阵。
+
+现有 Role / Permission CRUD Controller、Service、permission code 可以保留代码以减少无关返工，但 Gate 2 必须让对应写 API 不再成为第一版可操作产品能力。
+
+权限码直接使用现有数据库 seed，不新增第二套认证机制。
 
 ## 6. Nacos
 
@@ -145,6 +153,8 @@ Nacos Config 不是必做验收项。已有配置接入若稳定可保留，不�
 - complete task
 - abnormals list/detail/create
 
+S4 Gate 2 的本人数据范围、INSPECTOR + assignee + state 写入约束，以及计划 assignee 的 ENABLED INSPECTOR 校验以 `06-role-usecases.md` 为准。
+
 第一版任务生成采用人工触发，不实现复杂定时调度。
 
 创建 abnormal 后发送：
@@ -168,10 +178,12 @@ destination：`iiop_inspection_abnormal`
 
 - alarms list/detail/process
 - defects list/detail
-- work-orders CRUD/list/detail
-- assign/start/complete
+- work-orders create/list/detail
+- assign/start/repair-result
 - maintenance record
 - acceptance
+
+S4 Gate 2 不提供任意状态更新式工单/缺陷 CRUD。Defect confirm/close、WorkOrder assign/start/repair/acceptance、本人数据范围、职责分离、一个 Defect 一张正式 WorkOrder、AI 关联校验及 409 条件状态更新均以 `06-role-usecases.md` 为准。
 
 消费 `iiop_inspection_abnormal`：
 
@@ -180,7 +192,7 @@ destination：`iiop_inspection_abnormal`
 
 不再要求 maintenance 与 AI 之间通过 MQ 传 diagnosisId。
 
-AI 结果由前端调用 ai 服务查看，工单若需要 diagnosisId，可以在人工创建/确认时直接传入。
+AI 结果由前端调用 ai 服务查看。工单若携带 aiDiagnosisId，maintenance 必须通过 AI internal summary 校验 diagnosisStatus=SUCCEEDED、confirmationStatus=CONFIRMED、deviceId 一致；不能仅信任前端传入 diagnosisId。Defect 与 AI 的显式绑定路径按 `06-role-usecases.md` 执行。
 
 ## 11. RocketMQ
 

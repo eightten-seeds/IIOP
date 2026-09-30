@@ -311,6 +311,8 @@ Java 代码后续使用 Enum 与数据库字符串对应。
 - INSPECTOR
 - MAINTAINER
 
+第一版运行时角色集合固定为以上四种。sys_role 表继续保留通用数据结构和逻辑删除字段，但第一版公开业务 API 不允许新增第五种角色、删除固定角色或修改固定 role_code。
+
 约束：
 
 - UNIQUE(role_code)
@@ -336,6 +338,8 @@ Java 代码后续使用 Enum 与数据库字符串对应。
 | created_at | DATETIME | 否 | 创建时间 |
 | updated_at | DATETIME | 否 | 更新时间 |
 | deleted | TINYINT | 否 | 逻辑删除 |
+
+第一版 permission code 固定为本文件 14.2 的 33 个编码。sys_permission 表继续保留通用结构，但第一版公开业务 API 不允许创建/删除 permission，也不允许通过修改 permission 改变冻结授权模型。
 
 约束：
 
@@ -1631,7 +1635,9 @@ M1 固定插入以下权限编码。后端注解、PC 路由和按钮、HarmonyO
 SUPER_ADMIN：
 
 - 拥有全部 33 个固定权限；
-- 负责系统级用户、角色、权限治理以及全部业务操作。
+- 负责系统级用户治理、角色/权限基线查看、SUPER_ADMIN 角色授予/移除及对应保护校验；
+- 可以查看全部业务数据并执行 ADMIN 级管理动作；
+- 纯 SUPER_ADMIN 不绕过 INSPECTOR / MAINTAINER 与 assignee 约束执行现场巡检或维修，确需现场兜底时先增加对应现场角色并完成对象分派。
 
 ADMIN：
 
@@ -1640,8 +1646,10 @@ ADMIN：
 - 拥有 system:role:view、system:permission:view；
 - 不拥有 system:user:delete、system:role:create/update/delete/permission、system:permission:create/update/delete；
 - 业务管理员可以维护日常业务人员并分配已有的 ADMIN / INSPECTOR / MAINTAINER 角色，但不能授予或移除 SUPER_ADMIN；
-- 只有拥有 system:role:permission 的超级管理员级用户可以授予或移除 SUPER_ADMIN；
-- ADMIN 不能通过用户状态接口禁用或锁定当前具有 SUPER_ADMIN 的账号；对 SUPER_ADMIN 账号执行 ENABLED / DISABLED / LOCKED 状态变更同样要求 system:role:permission；
+- 只有拥有 system:role:permission 的 SUPER_ADMIN 可以为其他账号授予或移除 SUPER_ADMIN；该 permission 第一版不用于修改固定角色权限矩阵；
+- 当前登录 SUPER_ADMIN 不能移除自己的 SUPER_ADMIN 角色，也不能禁用、锁定或删除自己；
+- 仍拥有 SUPER_ADMIN 角色的账号不能直接删除，应先由另一个 SUPER_ADMIN 移除其 SUPER_ADMIN 角色；
+- ADMIN 不能通过用户状态接口禁用或锁定当前具有 SUPER_ADMIN 的账号；对其他 SUPER_ADMIN 账号执行 ENABLED / DISABLED / LOCKED 状态变更同样要求 system:role:permission；
 - 上述限制必须由 iiop-auth 后端强制执行，不能只依赖前端隐藏；
 - 业务管理员不能改变平台权限模型。
 
@@ -1667,13 +1675,16 @@ MAINTAINER：
 - ai:diagnosis
 - ai:confirm
 
-验收职责：
+冻结 RBAC 与验收职责：
 
+- 四个预置角色、33 个 permission code、06_seed_data.sql 定义的角色权限关系共同构成第一版冻结权限矩阵；
+- system:role:create/update/delete、system:permission:create/update/delete 等编码继续保留在 33 个固定 permission code 中，保持数据库与既有代码兼容，但第一版没有对应的动态 RBAC 产品流程；
+- system:role:permission 第一版用于 SUPER_ADMIN 角色授予/移除及保护校验，不用于动态修改固定角色权限矩阵；
 - maintenance:workorder:accept 仅授予 SUPER_ADMIN 与 ADMIN，用于体现维修处理与验收职责分离；
-- MAINTAINER 负责维修处理，不验收自己处理的工单；
-- inspection:abnormal:process 保留为固定权限码，只有后端存在对应处理动作时前端才显示操作，不能为了使用权限码虚构接口。
+- 实际维修人不得验收自己作为 assignee 处理的工单；
+- inspection:abnormal:process 保留为固定 permission code，只有后端存在对应处理动作时前端才显示操作，不能为了使用权限码虚构接口。
 
-06_seed_data.sql 应同时插入角色、权限以及上述角色权限关系。SUPER_ADMIN 的全部权限关系必须来自 sys_role_permission，不通过“角色名硬编码绕过 RBAC”。
+06_seed_data.sql 应同时插入角色、权限以及上述冻结角色权限关系。SUPER_ADMIN 的全部权限关系必须来自 sys_role_permission，不通过“角色名硬编码绕过 RBAC”。
 
 ## 14.3 设备分类
 
