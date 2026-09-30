@@ -8,4 +8,5 @@ public final class AiDtos {private AiDtos(){}
  public record ModelResult(String riskLevel,String abnormalSummary,List<String> possibleCauses,List<String> investigationSteps,String maintenanceAdvice,String safetyNotice,Boolean humanConfirmationRequired) implements Serializable {}
  public record WorkOrderDraft(String title,String description,String priority,String maintenanceAdvice,String safetyNotice) implements Serializable {}
  public record DiagnosisView(AiModels.Diagnosis diagnosis,List<String> possibleCauses,List<String> investigationSteps,WorkOrderDraft workOrderDraft,boolean humanConfirmationRequired){}
+ public record DiagnosisSummary(Long id,String triggerType,Long triggerId,Long deviceId,String diagnosisStatus,String confirmationStatus,String riskLevel){}
 }
