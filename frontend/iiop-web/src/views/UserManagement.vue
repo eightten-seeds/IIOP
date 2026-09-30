@@ -68,6 +68,7 @@ const roleUser = ref<UserSummary | null>(null);
 const selectedRoleIds = ref<string[]>([]);
 const createForm = reactive<UserCreateForm>({ username: '', password: '', realName: '', phone: '', email: '', avatarUrl: '', status: 'ENABLED' });
 const editForm = reactive<UserEditForm>({ realName: '', phone: '', email: '', avatarUrl: '' });
+const editTouched = reactive<Record<keyof UserEditForm, boolean>>({ realName: false, phone: false, email: false, avatarUrl: false });
 const editUser = ref<UserSummary | null>(null);
 
 const canManageSuperAdmin = computed(() => auth.roles.includes('SUPER_ADMIN') && auth.can('system:role:permission'));
@@ -137,6 +138,7 @@ async function openEdit(row: UserSummary) {
       email: detail.email ?? '',
       avatarUrl: detail.avatarUrl ?? ''
     });
+    Object.assign(editTouched, { realName: false, phone: false, email: false, avatarUrl: false });
     editVisible.value = true;
   } finally {
     editLoading.value = false;
@@ -145,15 +147,24 @@ async function openEdit(row: UserSummary) {
 
 async function updateUser() {
   if (!editUser.value) return;
+  const payload: Partial<UserEditForm> = {};
+  (Object.keys(editTouched) as Array<keyof UserEditForm>).forEach((field) => {
+    if (editTouched[field]) payload[field] = editForm[field];
+  });
+  if (!Object.keys(payload).length) return void ElMessage.warning('请先修改需要更新的资料');
   saving.value = true;
   try {
-    await request.put(`/api/auth/users/${editUser.value.id}`, { ...editForm });
+    await request.put(`/api/auth/users/${editUser.value.id}`, payload);
     ElMessage.success('用户资料更新成功');
     editVisible.value = false;
     await load();
   } finally {
     saving.value = false;
   }
+}
+
+function markEditTouched(field: keyof UserEditForm) {
+  editTouched[field] = true;
 }
 
 async function targetRoles(userId: string) {
@@ -315,12 +326,12 @@ onMounted(async () => {
     </el-dialog>
 
     <el-dialog v-model="editVisible" :title="`编辑用户：${editUser?.username||''}`" width="600px" :close-on-click-modal="!saving">
-      <el-alert title="后端当前仅返回姓名，手机号、邮箱和头像地址为空时请确认是否需要清空。" type="info" :closable="false" show-icon />
+      <el-alert title="后端当前不返回手机号、邮箱和头像；仅实际修改的字段会提交，未修改的空白字段保持原值。" type="info" :closable="false" show-icon />
       <el-form label-width="100px" class="dialog-form">
-        <el-form-item label="姓名"><el-input v-model="editForm.realName" /></el-form-item>
-        <el-form-item label="手机号"><el-input v-model="editForm.phone" /></el-form-item>
-        <el-form-item label="邮箱"><el-input v-model="editForm.email" /></el-form-item>
-        <el-form-item label="头像地址"><el-input v-model="editForm.avatarUrl" /></el-form-item>
+        <el-form-item label="姓名"><el-input v-model="editForm.realName" @input="markEditTouched('realName')" /></el-form-item>
+        <el-form-item label="手机号"><el-input v-model="editForm.phone" placeholder="留空且不修改则保持原值" @input="markEditTouched('phone')" /></el-form-item>
+        <el-form-item label="邮箱"><el-input v-model="editForm.email" placeholder="留空且不修改则保持原值" @input="markEditTouched('email')" /></el-form-item>
+        <el-form-item label="头像地址"><el-input v-model="editForm.avatarUrl" placeholder="留空且不修改则保持原值" @input="markEditTouched('avatarUrl')" /></el-form-item>
       </el-form>
       <template #footer><el-button :disabled="saving" @click="editVisible=false">取消</el-button><el-button type="primary" :loading="saving" @click="updateUser">保存</el-button></template>
     </el-dialog>
