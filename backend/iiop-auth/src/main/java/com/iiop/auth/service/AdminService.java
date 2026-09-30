@@ -32,8 +32,24 @@ public class AdminService {
         SysUser u=new SysUser();u.setUsername(req.username());u.setPasswordHash(encoder.encode(req.password()));u.setRealName(req.realName());u.setPhone(req.phone());u.setEmail(req.email());u.setAvatarUrl(req.avatarUrl());u.setStatus(normalStatus(req.status()));u.setDeleted(0);users.insert(u);return summary(u);
     }
     @Transactional public UserSummary updateUser(Long id,UserUpdateRequest req){SysUser u=requireUser(id);u.setRealName(req.realName());u.setPhone(req.phone());u.setEmail(req.email());u.setAvatarUrl(req.avatarUrl());users.updateById(u);return summary(u);}
-    @Transactional public void updateStatus(Long id,StatusRequest req){if(!List.of("ENABLED","DISABLED","LOCKED").contains(req.status()))throw new BizException(ErrorCode.BAD_REQUEST,"用户状态无效");SysUser u=requireUser(id);u.setStatus(req.status());users.updateById(u);if(!"ENABLED".equals(req.status()))StpUtil.logout(id);}
-    @Transactional public void updateUserRoles(Long id,IdListRequest req){requireUser(id);if(!req.ids().isEmpty()&&roles.selectBatchIds(req.ids()).size()!=req.ids().stream().distinct().count())throw new BizException(ErrorCode.BAD_REQUEST,"角色不存在");userRoles.delete(Wrappers.<SysUserRole>lambdaQuery().eq(SysUserRole::getUserId,id));for(Long roleId:req.ids().stream().distinct().toList()){SysUserRole x=new SysUserRole();x.setUserId(id);x.setRoleId(roleId);x.setCreatedAt(LocalDateTime.now());userRoles.insert(x);}StpUtil.logout(id);}
+    @Transactional public void updateStatus(Long id,StatusRequest req){
+        if(!List.of("ENABLED","DISABLED","LOCKED").contains(req.status()))throw new BizException(ErrorCode.BAD_REQUEST,"用户状态无效");
+        SysUser u=requireUser(id);
+        if(hasSuperAdminRole(id)) requireRolePermissionForSuperAdminChange();
+        u.setStatus(req.status());users.updateById(u);if(!"ENABLED".equals(req.status()))StpUtil.logout(id);
+    }
+    @Transactional public void updateUserRoles(Long id,IdListRequest req){
+        requireUser(id);
+        List<Long> requestedRoleIds=req.ids().stream().distinct().toList();
+        List<SysRole> requestedRoles=requestedRoleIds.isEmpty()?List.of():roles.selectBatchIds(requestedRoleIds);
+        if(requestedRoles.size()!=requestedRoleIds.size())throw new BizException(ErrorCode.BAD_REQUEST,"角色不存在");
+        boolean hadSuperAdmin=hasSuperAdminRole(id);
+        boolean willHaveSuperAdmin=requestedRoles.stream().anyMatch(role->"SUPER_ADMIN".equals(role.getRoleCode()));
+        if(hadSuperAdmin!=willHaveSuperAdmin) requireRolePermissionForSuperAdminChange();
+        userRoles.delete(Wrappers.<SysUserRole>lambdaQuery().eq(SysUserRole::getUserId,id));
+        for(Long roleId:requestedRoleIds){SysUserRole x=new SysUserRole();x.setUserId(id);x.setRoleId(roleId);x.setCreatedAt(LocalDateTime.now());userRoles.insert(x);}
+        StpUtil.logout(id);
+    }
     @Transactional public void deleteUser(Long id){requireUser(id);StpUtil.logout(id);userRoles.delete(Wrappers.<SysUserRole>lambdaQuery().eq(SysUserRole::getUserId,id));users.deleteById(id);}
 
     public List<RoleView> roles(){return roles.selectList(Wrappers.<SysRole>lambdaQuery().orderByAsc(SysRole::getRoleCode)).stream().map(this::view).toList();}
@@ -57,6 +73,13 @@ public class AdminService {
     private SysUser requireUser(Long id){SysUser u=users.selectById(id);if(u==null)throw new BizException(ErrorCode.NOT_FOUND,"用户不存在");return u;}
     private SysRole requireRole(Long id){SysRole r=roles.selectById(id);if(r==null)throw new BizException(ErrorCode.NOT_FOUND,"角色不存在");return r;}
     private SysPermission requirePermission(Long id){SysPermission p=permissions.selectById(id);if(p==null)throw new BizException(ErrorCode.NOT_FOUND,"权限不存在");return p;}
+    private boolean hasSuperAdminRole(Long userId){
+        List<Long> roleIds=userRoles.selectList(Wrappers.<SysUserRole>lambdaQuery().eq(SysUserRole::getUserId,userId)).stream().map(SysUserRole::getRoleId).toList();
+        return !roleIds.isEmpty()&&roles.selectBatchIds(roleIds).stream().anyMatch(role->"SUPER_ADMIN".equals(role.getRoleCode()));
+    }
+    private void requireRolePermissionForSuperAdminChange(){
+        if(!StpUtil.hasPermission("system:role:permission"))throw new BizException(ErrorCode.FORBIDDEN,"修改超级管理员角色或状态需要角色权限管理权限");
+    }
     private List<SysPermission> permissionEntities(){return permissions.selectList(Wrappers.<SysPermission>lambdaQuery().orderByAsc(SysPermission::getSortOrder));}
     private UserSummary summary(SysUser u){return new UserSummary(String.valueOf(u.getId()),u.getUsername(),u.getRealName(),u.getStatus());}
     private String normalStatus(String s){return s==null||s.isBlank()?"ENABLED":s;}
