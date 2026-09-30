@@ -159,10 +159,11 @@ Entity 不跨服务。
 
 1. 00-overview.md
 2. 01-database.md
-3. 02-backend.md
-4. 03-client.md
-5. 04-ai.md
-6. 05-roadmap.md
+3. 06-role-usecases.md（角色、数据范围、业务流程、人机交互冻结基线）
+4. 02-backend.md
+5. 03-client.md
+6. 04-ai.md
+7. 05-roadmap.md
 
 当前规范已经按“最小可交付”重新收口。
 
