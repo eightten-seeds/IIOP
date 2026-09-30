@@ -11,7 +11,7 @@ import org.springframework.web.bind.annotation.*;
 @RestController @RequestMapping("/api/auth/users")
 public class UserController {
     private final AdminService service; public UserController(AdminService service){this.service=service;}
-    @SaCheckPermission("system:user:view") @GetMapping public Result<PageResult<UserSummary>> list(@RequestParam(defaultValue="1") long pageNum,@RequestParam(defaultValue="20") long pageSize){return Result.success(service.users(pageNum,pageSize));}
+    @SaCheckPermission("system:user:view") @GetMapping public Result<PageResult<UserSummary>> list(@RequestParam(defaultValue="1") long pageNum,@RequestParam(defaultValue="20") long pageSize,@RequestParam(required=false) String keyword,@RequestParam(required=false) String status,@RequestParam(required=false) String roleCode){return Result.success(service.users(pageNum,pageSize,keyword,status,roleCode));}
     @SaCheckPermission("system:user:view") @GetMapping("/{id}") public Result<UserSummary> detail(@PathVariable Long id){return Result.success(service.user(id));}
     @SaCheckPermission("system:user:create") @PostMapping public Result<UserSummary> create(@Valid @RequestBody UserCreateRequest request){return Result.success(service.createUser(request));}
     @SaCheckPermission("system:user:update") @PutMapping("/{id}") public Result<UserSummary> update(@PathVariable Long id,@RequestBody UserUpdateRequest request){return Result.success(service.updateUser(id,request));}

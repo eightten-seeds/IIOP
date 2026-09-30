@@ -51,9 +51,11 @@ public class AuthService {
         List<Long> roleIds = userRoles.selectList(Wrappers.<SysUserRole>lambdaQuery().eq(SysUserRole::getUserId,userId))
                 .stream().map(SysUserRole::getRoleId).toList();
         if (roleIds.isEmpty()) return new AuthSnapshot(List.of(), List.of());
-        List<String> roleCodes = roles.selectBatchIds(roleIds).stream().filter(r -> "ENABLED".equals(r.getStatus()))
-                .map(SysRole::getRoleCode).distinct().sorted().toList();
-        List<Long> permissionIds = rolePermissions.selectList(Wrappers.<SysRolePermission>lambdaQuery().in(SysRolePermission::getRoleId,roleIds))
+        List<Long> enabledRoleIds = roles.selectBatchIds(roleIds).stream().filter(r -> "ENABLED".equals(r.getStatus()))
+                .map(SysRole::getId).toList();
+        List<String> roleCodes = roles.selectBatchIds(enabledRoleIds).stream().map(SysRole::getRoleCode).distinct().sorted().toList();
+        if (enabledRoleIds.isEmpty()) return new AuthSnapshot(List.of(), List.of());
+        List<Long> permissionIds = rolePermissions.selectList(Wrappers.<SysRolePermission>lambdaQuery().in(SysRolePermission::getRoleId,enabledRoleIds))
                 .stream().map(SysRolePermission::getPermissionId).distinct().toList();
         List<String> permissionCodes = permissionIds.isEmpty() ? List.of() : permissions.selectBatchIds(permissionIds).stream()
                 .filter(p -> "ENABLED".equals(p.getStatus())).map(SysPermission::getPermissionCode).distinct().sorted().toList();

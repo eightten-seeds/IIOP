@@ -18,15 +18,19 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class AdminService {
+    private static final Set<String> FIXED_ROLES=Set.of("SUPER_ADMIN","ADMIN","INSPECTOR","MAINTAINER");
     private final SysUserMapper users; private final SysRoleMapper roles; private final SysPermissionMapper permissions;
     private final SysUserRoleMapper userRoles; private final SysRolePermissionMapper rolePermissions; private final PasswordEncoder encoder;
     public AdminService(SysUserMapper u,SysRoleMapper r,SysPermissionMapper p,SysUserRoleMapper ur,SysRolePermissionMapper rp,PasswordEncoder e){users=u;roles=r;permissions=p;userRoles=ur;rolePermissions=rp;encoder=e;}
 
-    public PageResult<UserSummary> users(long pageNum,long pageSize){
-        IPage<SysUser> page=users.selectPage(new Page<>(pageNum,Math.min(pageSize,100)),Wrappers.<SysUser>lambdaQuery().orderByDesc(SysUser::getCreatedAt));
+    public PageResult<UserSummary> users(long pageNum,long pageSize,String keyword,String status,String roleCode){
+        var q=Wrappers.<SysUser>lambdaQuery().eq(status!=null&&!status.isBlank(),SysUser::getStatus,status).and(keyword!=null&&!keyword.isBlank(),w->w.like(SysUser::getUsername,keyword).or().like(SysUser::getRealName,keyword));
+        if(roleCode!=null&&!roleCode.isBlank()){SysRole role=roles.selectOne(Wrappers.<SysRole>lambdaQuery().eq(SysRole::getRoleCode,roleCode));if(role==null)return new PageResult<>(pageNum,pageSize,0,List.of());q.inSql(SysUser::getId,"select user_id from sys_user_role where role_id="+role.getId());}
+        IPage<SysUser> page=users.selectPage(new Page<>(pageNum,Math.min(pageSize,100)),q.orderByDesc(SysUser::getCreatedAt));
         return new PageResult<>(page.getCurrent(),page.getSize(),page.getTotal(),page.getRecords().stream().map(this::summary).toList());
     }
     public UserSummary user(Long id){return summary(requireUser(id));}
+    public UserJobSummary jobSummary(Long id){SysUser u=requireUser(id);List<Long> ids=userRoles.selectList(Wrappers.<SysUserRole>lambdaQuery().eq(SysUserRole::getUserId,id)).stream().map(SysUserRole::getRoleId).toList();List<String> codes=ids.isEmpty()?List.of():roles.selectBatchIds(ids).stream().filter(r->"ENABLED".equals(r.getStatus())).map(SysRole::getRoleCode).sorted().toList();return new UserJobSummary(String.valueOf(id),u.getStatus(),codes);}
     @Transactional public UserSummary createUser(UserCreateRequest req){
         if(users.selectCount(Wrappers.<SysUser>lambdaQuery().eq(SysUser::getUsername,req.username()))>0)throw new BizException(ErrorCode.CONFLICT,"用户名已存在");
         SysUser u=new SysUser();u.setUsername(req.username());u.setPasswordHash(encoder.encode(req.password()));u.setRealName(req.realName());u.setPhone(req.phone());u.setEmail(req.email());u.setAvatarUrl(req.avatarUrl());u.setStatus(normalStatus(req.status()));u.setDeleted(0);users.insert(u);return summary(u);
@@ -35,7 +39,7 @@ public class AdminService {
     @Transactional public void updateStatus(Long id,StatusRequest req){
         if(!List.of("ENABLED","DISABLED","LOCKED").contains(req.status()))throw new BizException(ErrorCode.BAD_REQUEST,"用户状态无效");
         SysUser u=requireUser(id);
-        if(hasSuperAdminRole(id)) requireRolePermissionForSuperAdminChange();
+        if(hasSuperAdminRole(id)){ requireRolePermissionForSuperAdminChange(); if(isSelf(id))throw new BizException(ErrorCode.CONFLICT,"超级管理员不能禁用、锁定自己"); }
         u.setStatus(req.status());users.updateById(u);if(!"ENABLED".equals(req.status()))StpUtil.logout(id);
     }
     @Transactional public void updateUserRoles(Long id,IdListRequest req){
@@ -43,21 +47,22 @@ public class AdminService {
         List<Long> requestedRoleIds=req.ids().stream().distinct().toList();
         List<SysRole> requestedRoles=requestedRoleIds.isEmpty()?List.of():roles.selectBatchIds(requestedRoleIds);
         if(requestedRoles.size()!=requestedRoleIds.size())throw new BizException(ErrorCode.BAD_REQUEST,"角色不存在");
+        if(requestedRoles.stream().anyMatch(r->!FIXED_ROLES.contains(r.getRoleCode())))throw new BizException(ErrorCode.BAD_REQUEST,"只能分配固定业务角色");
         boolean hadSuperAdmin=hasSuperAdminRole(id);
         boolean willHaveSuperAdmin=requestedRoles.stream().anyMatch(role->"SUPER_ADMIN".equals(role.getRoleCode()));
-        if(hadSuperAdmin!=willHaveSuperAdmin) requireRolePermissionForSuperAdminChange();
+        if(hadSuperAdmin!=willHaveSuperAdmin){requireRolePermissionForSuperAdminChange();if(isSelf(id)&&hadSuperAdmin)throw new BizException(ErrorCode.CONFLICT,"超级管理员不能移除自己的超级管理员角色");}
         userRoles.delete(Wrappers.<SysUserRole>lambdaQuery().eq(SysUserRole::getUserId,id));
         for(Long roleId:requestedRoleIds){SysUserRole x=new SysUserRole();x.setUserId(id);x.setRoleId(roleId);x.setCreatedAt(LocalDateTime.now());userRoles.insert(x);}
         StpUtil.logout(id);
     }
-    @Transactional public void deleteUser(Long id){requireUser(id);StpUtil.logout(id);userRoles.delete(Wrappers.<SysUserRole>lambdaQuery().eq(SysUserRole::getUserId,id));users.deleteById(id);}
+    @Transactional public void deleteUser(Long id){requireUser(id);if(hasSuperAdminRole(id)){requireRolePermissionForSuperAdminChange();if(isSelf(id))throw new BizException(ErrorCode.CONFLICT,"超级管理员不能删除自己");throw new BizException(ErrorCode.CONFLICT,"仍拥有超级管理员角色的用户不能删除");}StpUtil.logout(id);userRoles.delete(Wrappers.<SysUserRole>lambdaQuery().eq(SysUserRole::getUserId,id));users.deleteById(id);}
 
     public List<RoleView> roles(){return roles.selectList(Wrappers.<SysRole>lambdaQuery().orderByAsc(SysRole::getRoleCode)).stream().map(this::view).toList();}
     public RoleView role(Long id){return view(requireRole(id));}
-    @Transactional public RoleView createRole(RoleRequest req){if(roles.selectCount(Wrappers.<SysRole>lambdaQuery().eq(SysRole::getRoleCode,req.roleCode()))>0)throw new BizException(ErrorCode.CONFLICT,"角色编码已存在");SysRole r=new SysRole();apply(r,req);r.setDeleted(0);roles.insert(r);return view(r);}
-    @Transactional public RoleView updateRole(Long id,RoleRequest req){SysRole r=requireRole(id);apply(r,req);roles.updateById(r);return view(r);}
-    @Transactional public void deleteRole(Long id){requireRole(id);if(userRoles.selectCount(Wrappers.<SysUserRole>lambdaQuery().eq(SysUserRole::getRoleId,id))>0)throw new BizException(ErrorCode.CONFLICT,"角色仍被用户使用");rolePermissions.delete(Wrappers.<SysRolePermission>lambdaQuery().eq(SysRolePermission::getRoleId,id));roles.deleteById(id);}
-    @Transactional public void updateRolePermissions(Long id,IdListRequest req){requireRole(id);if(!req.ids().isEmpty()&&permissions.selectBatchIds(req.ids()).size()!=req.ids().stream().distinct().count())throw new BizException(ErrorCode.BAD_REQUEST,"权限不存在");rolePermissions.delete(Wrappers.<SysRolePermission>lambdaQuery().eq(SysRolePermission::getRoleId,id));for(Long permissionId:req.ids().stream().distinct().toList()){SysRolePermission x=new SysRolePermission();x.setRoleId(id);x.setPermissionId(permissionId);x.setCreatedAt(LocalDateTime.now());rolePermissions.insert(x);}List<Long> affected=userRoles.selectList(Wrappers.<SysUserRole>lambdaQuery().eq(SysUserRole::getRoleId,id)).stream().map(SysUserRole::getUserId).distinct().toList();affected.forEach(StpUtil::logout);}
+    @Transactional public RoleView createRole(RoleRequest req){throw frozen();}
+    @Transactional public RoleView updateRole(Long id,RoleRequest req){throw frozen();}
+    @Transactional public void deleteRole(Long id){throw frozen();}
+    @Transactional public void updateRolePermissions(Long id,IdListRequest req){throw frozen();}
 
     public List<PermissionView> permissions(){return permissionEntities().stream().map(this::view).toList();}
     public List<PermissionNode> permissionTree(){
@@ -66,9 +71,9 @@ public class AdminService {
         for(SysPermission p:all){PermissionNode node=nodes.get(p.getId());PermissionNode parent=p.getParentId()==null?null:nodes.get(p.getParentId());if(parent==null)roots.add(node);else parent.children().add(node);}
         return roots;
     }
-    @Transactional public PermissionView createPermission(PermissionRequest req){if(permissions.selectCount(Wrappers.<SysPermission>lambdaQuery().eq(SysPermission::getPermissionCode,req.permissionCode()))>0)throw new BizException(ErrorCode.CONFLICT,"权限编码已存在");SysPermission p=new SysPermission();apply(p,req);p.setDeleted(0);permissions.insert(p);return view(p);}
-    @Transactional public PermissionView updatePermission(Long id,PermissionRequest req){SysPermission p=requirePermission(id);apply(p,req);permissions.updateById(p);return view(p);}
-    @Transactional public void deletePermission(Long id){requirePermission(id);rolePermissions.delete(Wrappers.<SysRolePermission>lambdaQuery().eq(SysRolePermission::getPermissionId,id));permissions.deleteById(id);}
+    @Transactional public PermissionView createPermission(PermissionRequest req){throw frozen();}
+    @Transactional public PermissionView updatePermission(Long id,PermissionRequest req){throw frozen();}
+    @Transactional public void deletePermission(Long id){throw frozen();}
 
     private SysUser requireUser(Long id){SysUser u=users.selectById(id);if(u==null)throw new BizException(ErrorCode.NOT_FOUND,"用户不存在");return u;}
     private SysRole requireRole(Long id){SysRole r=roles.selectById(id);if(r==null)throw new BizException(ErrorCode.NOT_FOUND,"角色不存在");return r;}
@@ -78,8 +83,10 @@ public class AdminService {
         return !roleIds.isEmpty()&&roles.selectBatchIds(roleIds).stream().anyMatch(role->"SUPER_ADMIN".equals(role.getRoleCode()));
     }
     private void requireRolePermissionForSuperAdminChange(){
-        if(!StpUtil.hasPermission("system:role:permission"))throw new BizException(ErrorCode.FORBIDDEN,"修改超级管理员角色或状态需要角色权限管理权限");
+        if(!StpUtil.hasPermission("system:role:permission")||!StpUtil.hasRole("SUPER_ADMIN"))throw new BizException(ErrorCode.FORBIDDEN,"仅超级管理员可以修改超级管理员角色或状态");
     }
+    private boolean isSelf(Long id){return Objects.equals(StpUtil.getLoginIdAsLong(),id);}
+    private BizException frozen(){return new BizException(ErrorCode.CONFLICT,"第一版固定角色、权限及权限矩阵不可修改");}
     private List<SysPermission> permissionEntities(){return permissions.selectList(Wrappers.<SysPermission>lambdaQuery().orderByAsc(SysPermission::getSortOrder));}
     private UserSummary summary(SysUser u){return new UserSummary(String.valueOf(u.getId()),u.getUsername(),u.getRealName(),u.getStatus());}
     private String normalStatus(String s){return s==null||s.isBlank()?"ENABLED":s;}
