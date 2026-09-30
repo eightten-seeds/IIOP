@@ -30,6 +30,7 @@ public class AdminService {
         return new PageResult<>(page.getCurrent(),page.getSize(),page.getTotal(),page.getRecords().stream().map(this::summary).toList());
     }
     public UserSummary user(Long id){return summary(requireUser(id));}
+    public List<RoleView> userRoles(Long id){requireUser(id);List<Long> ids=userRoles.selectList(Wrappers.<SysUserRole>lambdaQuery().eq(SysUserRole::getUserId,id)).stream().map(SysUserRole::getRoleId).toList();return ids.isEmpty()?List.of():roles.selectBatchIds(ids).stream().filter(r->FIXED_ROLES.contains(r.getRoleCode())).map(this::view).toList();}
     public UserJobSummary jobSummary(Long id){SysUser u=requireUser(id);List<Long> ids=userRoles.selectList(Wrappers.<SysUserRole>lambdaQuery().eq(SysUserRole::getUserId,id)).stream().map(SysUserRole::getRoleId).toList();List<String> codes=ids.isEmpty()?List.of():roles.selectBatchIds(ids).stream().filter(r->"ENABLED".equals(r.getStatus())).map(SysRole::getRoleCode).sorted().toList();return new UserJobSummary(String.valueOf(id),u.getStatus(),codes);}
     @Transactional public UserSummary createUser(UserCreateRequest req){
         if(users.selectCount(Wrappers.<SysUser>lambdaQuery().eq(SysUser::getUsername,req.username()))>0)throw new BizException(ErrorCode.CONFLICT,"用户名已存在");
