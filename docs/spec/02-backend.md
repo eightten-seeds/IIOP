@@ -66,6 +66,8 @@ Gateway 只做：
 
 ## 5. Auth
 
+> S4 起所有角色数据范围、岗位动作约束和 Gate 2 最小 API 补充，以 `06-role-usecases.md` 为准。现有用户/角色/权限 CRUD 技术能力可保留，但第一版正式业务 Actor 固定为四种预置角色，PC 不提供创建第五种业务角色或新 permission 的产品流程。
+
 实现：
 
 - login
