@@ -177,7 +177,11 @@ Gate 2：
 - 业务专用页面
 - 状态驱动操作
 - 用户角色分配，ADMIN 不得授予或移除 SUPER_ADMIN
-- 角色/权限矩阵只读展示；冻结权限基线不在第一版 UI 动态修改
+- 角色/权限矩阵只读展示；冻结权限基线不在第一版 UI 或公开业务 API 动态修改
+- INSPECTOR/MAINTAINER 本人数据范围与直接详情校验
+- 工单分派/维修/验收职责分离与多角色自验收保护
+- 核心状态转换使用条件更新并在冲突时返回 409
+- Defect ↔ AI 显式关联与 AI 草案创建工单后端校验
 - 真实关联导航
 - 写操作反馈闭环
 
@@ -189,7 +193,7 @@ Gate 3：
 
 每个 Gate Codex push 后都由 ChatGPT 独立检查 GitHub；前一 Gate 未 PASS 不进入下一 Gate。
 
-详细页面、角色与交互要求以 docs/spec/03-client.md 为准。
+角色、数据范围、状态机和职责交接以 docs/spec/06-role-usecases.md 为准；页面技术与交互实现细节同时遵守 docs/spec/03-client.md。
 
 ### S4-B Visualization & Polish
 

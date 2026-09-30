@@ -45,7 +45,7 @@ Gate 2 开始后不得自行增加第五种业务角色、改变角色职责、�
 
 RocketMQ、IIOP 系统、DeepSeek、LangGraph4j 属于系统参与者，不属于登录角色。
 
-现有角色/权限 CRUD API 可保留作为技术能力，但第一版 PC 和 HarmonyOS 不提供“创建第五种业务角色”“创建新权限码”的产品流程，也不把自定义角色作为答辩或验收范围。
+现有通用 Role / Permission CRUD 代码可以保留作为历史技术能力，但第一版产品运行时冻结四个业务角色、33 个 permission code 和 seed/spec 定义的角色权限矩阵。PC 与 HarmonyOS 只读展示角色/权限基线，不提供创建第五种角色、删除固定角色、创建/删除 permission、修改固定角色权限矩阵的产品入口。Gate 2 后端也应阻止通过公开业务 API 改变这套冻结基线。用户角色分配仍允许在四个固定角色内进行。
 
 ### 2.2 Role 与 Permission 的职责
 
@@ -72,6 +72,12 @@ Permission 负责：
 3. 当前业务对象状态允许；
 4. 涉及本人数据时，当前用户是对象的 assignee。
 
+统一判定模型：
+
+permission 决定功能授权，role 决定岗位职责与数据范围，assignee 决定现场对象归属，state 决定当前动作是否允许。最终动作必须同时满足这些约束，任何单一条件都不能替代其他条件。
+
+`maintenance:workorder:process` 等共享 permission 可以覆盖多个业务动作，但后端仍必须按 role 和 state 区分“分派”“开始维修”“提交维修结果”等岗位步骤。
+
 ### 2.3 多角色用户
 
 数据库允许一个用户拥有多个角色，第一版允许多角色账号。
@@ -83,7 +89,12 @@ Permission 负责：
 - 菜单为多个角色工作视角的并集，再由 permissions 最终过滤；
 - 默认首页优先级固定为：
   SUPER_ADMIN > ADMIN > MAINTAINER > INSPECTOR；
-- Header 应能显示用户全部角色，不能只让多角色用户误以为自己只有第一个角色。
+- Header 应能显示用户全部角色，不能只让多角色用户误以为自己只有第一个角色；
+- 多角色用户的数据范围取各 ENABLED 角色数据范围的并集；
+- 数据范围并集只扩大“可见记录”，不会自动取消现场执行的 role + assignee 约束；
+- 例如 ADMIN + INSPECTOR 可以查看全部巡检任务，但执行某一任务仍要求用户拥有 INSPECTOR 角色且是该任务 assignee；
+- ADMIN + MAINTAINER 可以查看全部工单，但开始维修/提交维修结果仍要求用户拥有 MAINTAINER 角色且是该工单 assignee；
+- 同一账号同时具有管理和维修角色时，禁止验收自己作为 assignee 实际维修的工单。
 
 SUPER_ADMIN 建议使用独立账号，不作为普通现场账号的附加角色。
 
@@ -117,6 +128,12 @@ DISABLED / LOCKED 用户登录失败。
 
 第一版不实现“现场人员被禁用后自动迁移全部在途任务/工单”的复杂跨服务补偿；管理员在停用现场账号前应先处理其在途工作。此限制必须在用户状态变更确认框中提示。
 
+SUPER_ADMIN 账号治理增加最小自锁保护：
+
+- 当前登录 SUPER_ADMIN 不能移除自己的 SUPER_ADMIN 角色；
+- 当前登录 SUPER_ADMIN 不能禁用、锁定或删除自己；
+- 仍拥有 SUPER_ADMIN 角色的账号不能直接删除，应先由另一个 SUPER_ADMIN 移除其 SUPER_ADMIN 角色，再按普通用户处理。
+
 ---
 
 ## 3. 数据范围
@@ -131,7 +148,7 @@ DISABLED / LOCKED 用户登录失败。
 | 巡检任务 | 全部 | 全部 | 只看分配给本人任务 | 不进入 |
 | 巡检异常 | 全部 | 全部 | 只看本人任务产生的异常 | 不作为维修入口 |
 | 缺陷 | 全部 | 全部 | 不进入维修管理 | 全部可查看 |
-| 维修工单 | 全部 | 全部 | 不进入 | 默认只看分配给本人；创建者可看到刚创建的待分派工单 |
+| 维修工单 | 全部 | 全部 | 不进入 | 只看分配给本人；本人创建且仍为 PENDING 的待分派工单可见，分派给其他人后创建者不再拥有该工单访问权 |
 | AI 诊断 | 全部 | 全部 | 可查看/发起，不确认 | 可查看/发起/确认 |
 | 通知 | 仅本人 | 仅本人 | 仅本人 | 仅本人 |
 | 用户 | 全部 | 普通用户管理 | 无 | 无 |
@@ -149,10 +166,13 @@ INSPECTOR 不能确认 AI，也不能据 AI 草案创建维修工单。
 
 以下规则不能只靠前端过滤：
 
+- INSPECTOR 的 task list / task detail 只允许读取本人任务，abnormal list / detail 只允许读取本人任务产生的异常；
 - INSPECTOR 只能 start / submit item / create abnormal / complete 自己被分配的巡检任务；
+- MAINTAINER 的 work-order list / detail 只允许读取本人 assignee 工单，以及本人创建且仍为 PENDING 的待分派工单；
 - MAINTAINER 只能 start / repair-result 自己被分配的维修工单；
 - MAINTAINER 不能执行 acceptance；
 - ADMIN / SUPER_ADMIN 才能执行工单 assign；
+- 多角色账号执行 acceptance 时，acceptedBy 不能等于 workOrder.assigneeUserId；
 - 计划 assignee 必须是 ENABLED INSPECTOR；
 - 工单 assignee 必须是 ENABLED MAINTAINER。
 
@@ -171,8 +191,10 @@ INSPECTOR 不能确认 AI，也不能据 AI 草案创建维修工单。
 - 启用、禁用、锁定普通用户；
 - 删除普通用户；
 - 为用户分配现有角色；
-- 授予或移除 SUPER_ADMIN；
-- 修改 SUPER_ADMIN 账号状态。
+- 为其他账号授予或移除 SUPER_ADMIN；
+- 修改其他 SUPER_ADMIN 账号状态。
+
+同时必须遵守 2.5 的自锁保护：当前登录 SUPER_ADMIN 不能移除自己的 SUPER_ADMIN、不能禁用/锁定/删除自己，仍拥有 SUPER_ADMIN 的账号不能直接删除。
 
 高风险操作必须二次确认。
 
@@ -190,11 +212,15 @@ SUPER_ADMIN 可以查看：
 
 第一版角色权限矩阵以 seed/spec 为冻结基线，PC 只读展示，避免动态修改后造成默认首页、菜单和岗位职责互相冲突。
 
+运行时同样冻结该矩阵。Gate 2 应让公开业务 API 无法创建/删除固定角色或 permission，也无法修改固定角色的权限关系。现有通用 CRUD 实现可以保留代码，但不得成为第一版可操作产品能力。
+
 ### UC-SA-03 全业务兜底
 
-SUPER_ADMIN 可以在具备对应 permission 时查看和执行全部业务模块，用于系统治理、演示和异常兜底。
+SUPER_ADMIN 在具备对应 permission 时可以查看全部业务数据，并执行 ADMIN 级管理动作，用于系统治理、演示和异常兜底。
 
-正常业务演示仍优先使用 ADMIN、INSPECTOR、MAINTAINER 完成岗位交接。
+巡检执行和维修执行仍属于现场岗位动作。纯 SUPER_ADMIN 账号不直接绕过 INSPECTOR / MAINTAINER 与 assignee 约束执行现场任务。确需兜底时，应先给该账号增加对应现场角色，并将具体任务或工单分派给该账号。
+
+正常业务演示优先使用 ADMIN、INSPECTOR、MAINTAINER 完成岗位交接。
 
 ### UC-SA-04 工单验收
 
@@ -242,7 +268,7 @@ ADMIN 是 PC 端主要业务管理岗位。
 
 只有 ENABLED 模板可以用于生成任务。
 
-PHOTO 第一版不是阻塞项。
+PHOTO 第一版不实现真实图片上传，也不提供假的上传交互。Gate 2 模板编辑器不允许新建 PHOTO 类型检查项；若历史数据存在 requiredFlag=1 的 PHOTO 项，应提示该模板当前不能用于第一版巡检执行，管理员需要先调整模板。
 
 ### UC-AD-03 创建巡检计划
 
@@ -381,6 +407,10 @@ AI confirm 本身不得创建 maintenance 数据。
 - workOrderType；
 - priority。
 
+如果请求携带 aiDiagnosisId，maintenance 后端必须通过最小 AI internal summary 验证该诊断真实存在，并满足 diagnosisStatus=SUCCEEDED、confirmationStatus=CONFIRMED、deviceId 一致。FAILED / REJECTED 诊断不能作为 AI 草案来源创建工单；用户仍可人工创建工单，但该人工工单不携带对应 aiDiagnosisId。
+
+如果请求携带 defectId，则该 Defect 必须处于 CONFIRMED，且第一版同一 Defect 只能存在一张正式 WorkOrder。已有工单时重复创建返回 409。创建成功后 Defect 自动从 CONFIRMED 推进到 PROCESSING。
+
 第一版真实 WorkOrder 不使用持久化 DRAFT 作为主流程起点；AI WorkOrderDraft 只是前端待审核草案，正式提交后直接为 PENDING。
 
 ### UC-AD-09 分派工单
@@ -421,6 +451,8 @@ REJECTED：
 - MAINTAINER 再次维修后重新提交验收。
 
 验收页面必须显示维修记录和历史验收结果，不能只显示原始 JSON。
+
+多角色账号仍必须满足职责分离：acceptedBy 不能等于当前 WorkOrder.assigneeUserId。也就是实际执行该工单维修的人不能验收自己的维修结果。
 
 ### UC-AD-11 日常用户管理
 
@@ -465,6 +497,8 @@ ADMIN 不能：
 空状态：
 
 “当前没有分配给你的巡检任务”。
+
+列表数据范围必须同时作用于详情接口。INSPECTOR 直接输入其他人的 taskId 访问详情时，后端也必须拒绝，不能只在列表隐藏。
 
 ### UC-IN-02 开始巡检
 
@@ -543,6 +577,8 @@ INSPECTOR 可以：
 - 查看 AI 结果；
 - 查看五节点 trace。
 
+INSPECTOR 发起 AI 时只允许使用本人异常对应的 INSPECTION_ABNORMAL trigger，后端必须验证 abnormal 所属 task 的 assigneeUserId 为当前用户。INSPECTOR 不能通过手工构造 ALARM / MANUAL trigger 扩大操作范围。
+
 INSPECTOR 不可以：
 
 - ai:confirm；
@@ -598,13 +634,13 @@ MAINTAINER 拥有：
 
 ### UC-MA-04 创建工单
 
-MAINTAINER 可以从缺陷或确认后的 AI 诊断人工创建维修工单。
+MAINTAINER 可以从 CONFIRMED 缺陷或确认后的 AI 诊断人工创建维修工单。
 
 创建后：
 
 PENDING
 
-MAINTAINER 不能在创建动作中直接自分派。
+第一版同一个 Defect 只允许一张正式 WorkOrder。MAINTAINER 不能在创建动作中直接自分派。
 
 ### UC-MA-05 我的维修工单
 
@@ -617,7 +653,7 @@ MAINTAINER 不能在创建动作中直接自分派。
 - WAITING_ACCEPTANCE；
 - 验收驳回后重新进入 PROCESSING 的工单。
 
-创建者可在创建成功后查看自己刚创建的 PENDING 工单，但 PENDING 的正式调度仍由 ADMIN / SUPER_ADMIN 完成。
+创建者可在创建成功后查看自己刚创建的 PENDING 工单，但 PENDING 的正式调度仍由 ADMIN / SUPER_ADMIN 完成。若该工单随后被分派给其他 MAINTAINER，原创建者不再因为 creator 身份继续访问该工单。直接访问详情接口也应执行同一规则。
 
 ### UC-MA-06 开始维修
 
@@ -681,7 +717,7 @@ MAINTAINER 没有 maintenance:workorder:accept。
 
 前端不显示验收操作。
 
-直接调用 acceptance API 必须返回 403。
+纯 MAINTAINER 直接调用 acceptance API 必须返回 403。若用户同时拥有 ADMIN / SUPER_ADMIN 与 MAINTAINER，多角色权限并集也不能允许其验收自己作为 assignee 实际维修的工单，此类业务冲突返回 409。
 
 ---
 
@@ -772,7 +808,7 @@ CANCELLED 数据库值保留，但第一版没有真实取消 API时不提供取
 
 PENDING -> NORMAL / ABNORMAL
 
-已完成任务只读。
+Task 仍为 IN_PROGRESS 时，已填写项允许在 NORMAL 与 ABNORMAL 之间修正并重新提交；Task 进入 COMPLETED 后全部检查项只读。
 
 ### 9.3 Abnormal
 
@@ -803,6 +839,8 @@ OPEN
 
 - 创建关联 WorkOrder -> PROCESSING；
 - WorkOrder 验收 PASSED -> RESOLVED。
+
+第一版每个 Defect 只允许一张正式 WorkOrder。重复创建必须返回 409，验收驳回继续复用原工单返修。
 
 禁止任意枚举下拉直接跳状态。
 
@@ -846,16 +884,35 @@ PENDING -> REJECTED
 
 ## 10. 人机交互基线
 
-### 10.1 页面必须回答四个问题
+### 10.1 页面必须回答七个问题
 
 每个核心页面必须让用户马上知道：
 
-1. 我正在看什么对象；
-2. 它现在是什么状态；
-3. 我现在可以做什么；
-4. 完成后下一步交给谁。
+1. 谁来；
+2. 为什么来；
+3. 能看到什么；
+4. 能操作什么；
+5. 什么状态下能操作；
+6. 操作以后状态变成什么；
+7. 下一步交给谁。
 
-如果页面只展示字段和 JSON，不满足 Gate 2。
+页面仍应清楚展示当前对象身份和当前状态。只展示字段和 JSON 不满足 Gate 2。
+
+核心页面统一交接模型：
+
+| 页面 | 主要角色 | 核心目的 | 核心动作 | 下一交接 |
+|---|---|---|---|---|
+| Dashboard | 四角色 | 找到当前待办 | 跳转真实待办 | 对应业务页 |
+| Device | ADMIN / SUPER_ADMIN 管理，现场只读 | 设备上下文 | 管理档案、查看关联 | 巡检/维修 |
+| Template | ADMIN / SUPER_ADMIN | 定义巡检内容 | 配置并启用 | Plan |
+| Plan | ADMIN / SUPER_ADMIN | 安排巡检 | 选择 INSPECTOR、生成 Task | INSPECTOR |
+| Task | assignee INSPECTOR | 完成现场巡检 | start / item / abnormal / complete | RocketMQ / Defect |
+| Abnormal | INSPECTOR / ADMIN / SUPER_ADMIN | 查看现场异常事实 | 查看关联、发起 AI | Defect / AI |
+| Defect | MAINTAINER / ADMIN / SUPER_ADMIN | 进入维修处理 | confirm / AI / 创建工单 / close | WorkOrder |
+| WorkOrder | ADMIN / SUPER_ADMIN / assignee MAINTAINER | 调度、维修、验收 | assign / start / repair / acceptance | ADMIN 与 MAINTAINER 交接 |
+| AI Detail | 有 ai:view 的角色 | 查看辅助诊断 | confirm/reject 或返回人工流程 | WorkOrder / Defect |
+| Users | ADMIN / SUPER_ADMIN | 管理账号与岗位 | 用户资料、状态、四角色分配 | 被管理用户 |
+| Roles/Permissions | ADMIN / SUPER_ADMIN | 查看冻结授权模型 | 只读 | 无 |
 
 ### 10.2 状态驱动操作区
 
@@ -870,11 +927,11 @@ PENDING -> REJECTED
 
 | 状态 | ADMIN / SUPER_ADMIN | 被分派 MAINTAINER | 其他 MAINTAINER |
 |---|---|---|---|
-| PENDING | 分派 | 等待分派 | 只读 |
-| ASSIGNED | 查看 | 开始维修 | 只读 |
-| PROCESSING | 查看进度 | 提交维修结果 | 只读 |
-| WAITING_ACCEPTANCE | 验收通过/驳回 | 等待验收 | 只读 |
-| COMPLETED | 只读 | 只读 | 只读 |
+| PENDING | 分派 | 本人创建时只读等待分派 | 无访问权 |
+| ASSIGNED | 查看 | 开始维修 | 无访问权 |
+| PROCESSING | 查看进度 | 提交维修结果 | 无访问权 |
+| WAITING_ACCEPTANCE | 验收通过/驳回 | 等待验收 | 无访问权 |
+| COMPLETED | 只读 | 只读 | 无访问权 |
 
 ### 10.3 业务选择器
 
@@ -1006,6 +1063,8 @@ loading -> success / empty / error
 - 开始维修；
 - 提交维修；
 - 验收。
+
+前端 409 处理成立的前提是后端状态转换具有原子条件。核心状态写入应使用“id + expected current status”条件更新，affectedRows=0 时返回 409。第一版不增加 version 字段、不引入分布式锁框架。
 
 ### 10.11 HTTP 语义
 
@@ -1165,10 +1224,12 @@ HarmonyOS 不提供：
 
 ### 13.2 Gate 2 必须补的最小后端能力
 
-1. Auth 用户查询：
+1. Auth 用户与冻结 RBAC：
    - users list 支持 roleCode / status / keyword 过滤，用于 INSPECTOR、MAINTAINER 选择器；
    - 提供目标用户已有角色读取能力，避免角色分配空选覆盖；
-   - internal auth 提供用户是否 ENABLED 且拥有指定 role 的最小校验能力。
+   - internal auth 提供用户 status + roleCodes 的最小读取/校验能力；
+   - 第一版公开业务 API 不允许创建/删除固定角色或 permission，不允许修改固定角色权限矩阵；
+   - 用户角色分配只在四个固定角色内进行，并执行 SUPER_ADMIN 自锁保护。
 
 2. Auth Snapshot：
    - 只有 ENABLED role 可以贡献 permission；
@@ -1177,8 +1238,10 @@ HarmonyOS 不提供：
 3. Inspection 数据范围：
    - task list 支持本人范围和状态/结果/device 过滤；
    - INSPECTOR 默认后端只返回本人任务；
-   - abnormal list 支持 taskId / deviceId / severity 等必要关联筛选；
-   - start / submit item / create abnormal / complete 校验当前 assignee。
+   - task detail 对 INSPECTOR 同样校验本人范围，直接 URL 不得绕过；
+   - abnormal list 支持 taskId / deviceId / severity 等必要关联筛选，并对 INSPECTOR 限定本人任务异常；
+   - abnormal detail 对 INSPECTOR 执行同一范围校验；
+   - start / submit item / create abnormal / complete 校验 INSPECTOR 角色 + 当前 assignee + 合法状态。
 
 4. Inspection 计划：
    - 创建/更新 plan 时校验 assignee 是 ENABLED INSPECTOR。
@@ -1191,20 +1254,34 @@ HarmonyOS 不提供：
 6. Maintenance 状态职责：
    - assign 仅 ADMIN / SUPER_ADMIN；
    - assignee 必须 ENABLED MAINTAINER；
-   - start / repair-result 只能当前 assignee；
-   - acceptance 继续仅 ADMIN / SUPER_ADMIN；
-   - defect 不再接受任意 status 跳转，按本文件状态机收紧。
+   - start / repair-result 要求 MAINTAINER 角色且只能当前 assignee；
+   - acceptance 仅 ADMIN / SUPER_ADMIN，且 acceptedBy != workOrder.assigneeUserId；
+   - work-order detail 对 MAINTAINER 执行本人 assignee / 本人创建且 PENDING 的数据范围；
+   - defect 不再接受任意 status 跳转，改为明确 confirm / close 业务动作并按本文件状态机收紧。
 
 7. Defect 与 AI：
    - AI list 至少支持 triggerType / triggerId / deviceId / diagnosisStatus / riskLevel / confirmationStatus 查询；
+   - INSPECTOR 发起 AI 只允许本人异常对应的 INSPECTION_ABNORMAL trigger；
    - 对 INSPECTION_ABNORMAL / ALARM 缺陷按 sourceType/sourceId 定位 AI；
-   - MANUAL defect 发起 MANUAL AI 后，需要一个最小、明确的 defect.aiDiagnosisId 绑定路径，禁止前端全量扫描猜关联；
+   - 使用最小显式绑定路径 PUT /api/maintenance/defects/{id}/ai-diagnosis，把有效 diagnosis 绑定为 defect.aiDiagnosisId；
+   - 绑定时验证 diagnosis 存在、deviceId 一致，非 MANUAL 类型还要验证 triggerType/triggerId 与 defect.sourceType/sourceId 一致；
+   - AI 提供最小 internal diagnosis summary，供绑定与工单创建校验；
+   - reject comment 必填；
    - 不新增数据库表或微服务。
 
 8. WorkOrder 与 Defect：
-   - 从 defect 创建工单时推进 defect CONFIRMED -> PROCESSING；
+   - 从 defect 创建工单要求 defect=CONFIRMED；
+   - 第一版同一 defect 只允许一张正式 WorkOrder，重复创建返回 409；
+   - 创建成功推进 defect CONFIRMED -> PROCESSING；
+   - 携带 aiDiagnosisId 时通过 AI internal summary 验证 SUCCEEDED + CONFIRMED + deviceId 一致；
+   - AI FAILED / REJECTED 后仍可人工创建工单，但该人工工单不携带该 aiDiagnosisId；
    - acceptance PASSED 保持 PROCESSING -> RESOLVED；
    - REJECTED 不把 defect 标记为 RESOLVED。
+
+9. 状态并发：
+   - task start/complete、defect confirm/close、work-order assign/start/repair/acceptance、AI confirm/reject 使用“id + expected status”条件更新；
+   - 条件更新失败返回 409；
+   - 不新增 version 字段，不引入分布式锁。
 
 ### 13.3 Gate 2 必须补的前端能力
 
@@ -1233,10 +1310,13 @@ HarmonyOS 不提供：
 - 手工输入业务 ID；
 - 为每个角色复制一套页面；
 - 角色名直接绕过 permission；
+- 第一版通过公开业务 API 动态创建/删除角色、permission 或修改冻结角色权限矩阵；
 - AI 自动创建真实工单；
 - MAINTAINER 自验收；
 - INSPECTOR 执行别人任务；
-- MAINTAINER 处理别人已分派工单；
+- MAINTAINER 处理或读取别人已分派工单；
+- 实际维修人验收自己的工单；
+- 同一 Defect 重复创建多张正式工单；
 - 为使用闲置 permission 而虚构业务按钮；
 - 用静态假数据填 Dashboard。
 
@@ -1278,7 +1358,9 @@ Gate 2 至少逐条真实验证：
 - CONFIRMED AI 草案人工创建工单；
 - 工单只能分派 ENABLED MAINTAINER；
 - WAITING_ACCEPTANCE 验收通过/驳回；
-- 用户角色分配保留已有角色，不发生空选覆盖。
+- 用户角色分配保留已有角色，不发生空选覆盖；
+- 固定角色/权限矩阵只读，公开 API 不能改变冻结 RBAC 基线；
+- 多角色用户不能验收自己作为 assignee 维修的工单。
 
 ### INSPECTOR
 
@@ -1287,7 +1369,8 @@ Gate 2 至少逐条真实验证：
 - 按类型填写检查项；
 - 必填未完成不能完成任务；
 - 上报异常；
-- 查看/发起 AI；
+- 查看/发起本人异常对应的 AI；
+- 不能通过 ALARM / MANUAL trigger 绕过本人异常范围；
 - 不能 AI confirm；
 - 不能进入维修操作。
 
@@ -1295,7 +1378,7 @@ Gate 2 至少逐条真实验证：
 
 - 默认看到自己的维修工单；
 - 可以查看缺陷并发起/确认 AI；
-- 可以创建 PENDING 工单；
+- 可以从 CONFIRMED Defect 创建唯一的 PENDING 工单；
 - 不能自行分派；
 - 只能开始和提交自己的 ASSIGNED/PROCESSING 工单；
 - WAITING_ACCEPTANCE 只读；
@@ -1350,8 +1433,13 @@ MAINTAINER
 - ADMIN 负责业务配置、调度和验收；
 - SUPER_ADMIN 负责系统治理和兜底；
 - AI 只辅助，不替代人工决策；
-- permissions 决定授权；
+- permissions 决定功能授权；
 - roles 决定岗位、数据范围和工作视角；
-- assignee 决定现场人员可以实际操作哪一条任务/工单。
+- assignee 决定现场人员可以实际操作哪一条任务/工单；
+- state 决定当前步骤是否允许；
+- 多角色只取权限和数据范围并集，不取消现场归属和职责分离；
+- 四角色、33 个 permission code 与固定角色权限矩阵在第一版运行时冻结。
+
+统一动作判定：permission ∩ role ∩ data scope ∩ state ∩ ownership。
 
 未经明确确认，后续 Codex 不得改变上述基线。

@@ -683,7 +683,7 @@ Gate 2 必须把核心页面从“字段填写器”提升为业务操作界面�
 - deviceId 使用设备选择器，显示设备编码 + 名称。
 - assigneeUserId 使用用户/负责人选择器。
 - roleIds 使用角色多选。
-- permissionIds 使用权限分组或树形多选。
+- 角色/权限页面只读展示固定矩阵，第一版不提供 permissionIds 编辑控件。
 
 状态、风险、周期、工单类型、结果状态等有限枚举必须使用 Select、Radio、Tag 等受控组件，不能退化为任意文本输入。
 
@@ -744,7 +744,7 @@ HIGH / CRITICAL 且 humanConfirmationRequired=true 时应有醒目的人工确�
 确认和拒绝：
 
 - 使用确认对话框；
-- 允许填写 comment；
+- CONFIRM comment 可选，REJECT comment 必填；
 - 提交时 loading/disabled；
 - 成功后刷新；
 - CONFIRMED / REJECTED 后隐藏重复操作；
@@ -771,7 +771,7 @@ error 状态提供可理解的中文错误和“重试”入口。
 - 提交维修结果
 - 工单验收
 - 用户禁用
-- 角色权限修改
+- 用户角色变更
 - 删除类操作
 
 ### Dashboard 待办导向
@@ -946,7 +946,7 @@ Home/Profile 如有需要可以作为简单入口，不扩展额外业务。
 - 提交异常
 - 完成任务
 
-PHOTO 第一版可以不作为阻塞项。
+PHOTO 第一版不实现真实上传，也不提供假的上传按钮；模板编辑器不允许新增 PHOTO 项。历史 required PHOTO 项应提示管理员先调整模板。
 
 ## 20. HarmonyOS 维修
 
