@@ -13,7 +13,6 @@ public final class AiClients {private AiClients(){}
  @FeignClient(name="iiop-inspection") public interface InspectionClient {
   @GetMapping("/internal/inspection/devices/{id}/recent-history") Result<Map<String,Object>> history(@PathVariable Long id);
   @GetMapping("/internal/inspection/abnormals/{id}/ai-context") Result<AbnormalDto> abnormal(@PathVariable Long id);
-  @GetMapping("/internal/inspection/assignees/{userId}/abnormal-ids") Result<List<Long>> abnormalIds(@PathVariable Long userId);
  }
  @FeignClient(name="iiop-maintenance") public interface MaintenanceClient {
   @GetMapping("/internal/maintenance/devices/{id}/history") Result<Map<String,Object>> history(@PathVariable Long id);
