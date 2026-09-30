@@ -165,7 +165,7 @@ Gate 1 通过后，Gate 2 开发前必须先冻结并遵守 `docs/spec/06-role-u
 
 S4-A 内部验收：
 
-Gate 1：
+Gate 1：PASS WITH NOTES（提交 d387e463de6b598088ffd31a3c548c1284e552fd）
 - Auth / roles / permissions
 - 四角色默认落地
 - Router Guard / 403
@@ -343,4 +343,4 @@ S4-A：当前阶段
 
 当前：
 
-**S4-A 角色/权限与交互基线校正 → Gate 1。**
+**S4-A Gate 1 已通过。角色/数据范围/业务流程/人机交互已冻结到 06-role-usecases.md，下一步进入 Gate 2，先补最小后端业务约束与关联能力，再开发业务化页面。**
