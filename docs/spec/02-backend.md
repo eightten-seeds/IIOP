@@ -87,9 +87,11 @@ Gateway 只做：
 Gate 2 与 Auth 账号生命周期约束：
 
 - 系统无公开注册：用户账号仅允许由具备 `system:user` 权限的管理人员创建；
-- 登录必须携带图形验证码：`GET /api/auth/captcha` 返回 captchaKey 与图片 Base64，Redis 存储 key `iiop:captcha:{key}`，TTL 120s，一次性消费（校验即删除）；
-- 个人修改密码：`PUT /api/auth/password`，校验原密码正确性，新密码与旧密码不得相同，成功后调用 `StpUtil.logout()` 强制下线；
-- 管理员重置密码：`PUT /api/auth/users/{id}/password`，需具备 `system:user` 权限；不可重置当前登录账号自身（避免自锁混淆，自身必须走修改密码流程）；不可重置 SUPER_ADMIN（若非 SUPER_ADMIN 越权）；重置成功后调用 `StpUtil.logoutByLoginId(id)` 踢出目标用户；
+- 登录必须携带图形验证码：`GET /api/auth/captcha` 返回 `captchaId` 与图片 Base64 `image`，Redis 存储 key `iiop:captcha:{captchaId}`，TTL 120s，一次性消费（校验即删除）；登录请求必须包含 `username`、`password`、`captchaId`、`captchaCode` 且均不得为空；
+- 登录失败统一语义：用户不存在、密码错误、账号停用（DISABLED）或锁定（LOCKED），均返回 HTTP 401 统一提示“用户名或密码错误，或账号不可用”，不向前端泄露账号存在性或具体不可用状态；验证码错误或失效返回 HTTP 400 并统一提示“验证码错误或已失效，请重新获取”；
+- 密码统一规则：密码长度必须为 8~72 位；创建用户、个人修改密码、管理员重置密码均严格执行 8~72 位约束；
+- 个人修改密码：`PUT /api/auth/password`，校验原密码正确性，新密码 8~72 位且与原密码不同，成功后调用 `StpUtil.logout(id)` 强制下线目标账号所有在线会话；
+- 管理员重置密码：`PUT /api/auth/users/{id}/password`，需具备 `system:user:update` 权限；不可重置当前登录账号自身（避免自锁混淆，自身必须走修改密码流程）；不可重置 SUPER_ADMIN（若非 SUPER_ADMIN 越权）；重置密码 8~72 位，成功后调用 `StpUtil.logout(id)` 踢出目标用户所有在线会话；
 - 角色权限只读：`GET /api/auth/roles/{id}/permissions` 仅供只读矩阵查询，公开业务 API 不允许创建/删除角色、创建/删除 permission 或修改固定角色权限矩阵；
 - Gateway 限流保护：对 `/api/auth/login` 与 `/api/auth/captcha` 配置基础限流（登录 2 QPS，验证码 5 QPS），匿名放行 captcha 与 login。
 - permissions 只由 ENABLED 角色贡献；

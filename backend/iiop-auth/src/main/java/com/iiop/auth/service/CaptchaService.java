@@ -21,6 +21,7 @@ import java.util.UUID;
 
 @Service
 public class CaptchaService {
+    private static final String CAPTCHA_ERROR_MESSAGE = "验证码错误或已失效，请重新获取";
     private static final String CAPTCHA_KEY_PREFIX = "iiop:captcha:";
     private static final long CAPTCHA_TTL_SECONDS = 120;
     private static final char[] CODE_CHARS = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ".toCharArray();
@@ -39,14 +40,14 @@ public class CaptchaService {
     }
 
     public CaptchaResponse generate() {
-        String key = UUID.randomUUID().toString().replace("-", "");
+        String captchaId = UUID.randomUUID().toString().replace("-", "");
         StringBuilder sb = new StringBuilder(4);
         for (int i = 0; i < 4; i++) {
             sb.append(CODE_CHARS[random.nextInt(CODE_CHARS.length)]);
         }
         String code = sb.toString();
 
-        redisTemplate.opsForValue().set(CAPTCHA_KEY_PREFIX + key, code.toUpperCase(), Duration.ofSeconds(CAPTCHA_TTL_SECONDS));
+        redisTemplate.opsForValue().set(CAPTCHA_KEY_PREFIX + captchaId, code.toUpperCase(), Duration.ofSeconds(CAPTCHA_TTL_SECONDS));
 
         BufferedImage image = new BufferedImage(WIDTH, HEIGHT, BufferedImage.TYPE_INT_RGB);
         Graphics2D g = image.createGraphics();
@@ -91,14 +92,14 @@ public class CaptchaService {
             throw new BizException(ErrorCode.INTERNAL_ERROR, "生成验证码失败");
         }
         String base64 = "data:image/png;base64," + Base64.getEncoder().encodeToString(baos.toByteArray());
-        return new CaptchaResponse(key, base64);
+        return new CaptchaResponse(captchaId, base64);
     }
 
-    public void verifyAndConsume(String key, String code) {
-        if (key == null || key.isBlank() || code == null || code.isBlank()) {
-            throw new BizException(ErrorCode.BAD_REQUEST, "请输入验证码");
+    public void verifyAndConsume(String captchaId, String code) {
+        if (captchaId == null || captchaId.isBlank() || code == null || code.isBlank()) {
+            throw new BizException(ErrorCode.BAD_REQUEST, CAPTCHA_ERROR_MESSAGE);
         }
-        String redisKey = CAPTCHA_KEY_PREFIX + key;
+        String redisKey = CAPTCHA_KEY_PREFIX + captchaId;
         String cachedCode;
         try {
             cachedCode = redisTemplate.execute(GET_AND_DEL_SCRIPT, List.of(redisKey));
@@ -107,10 +108,10 @@ public class CaptchaService {
             redisTemplate.delete(redisKey);
         }
         if (cachedCode == null) {
-            throw new BizException(ErrorCode.BAD_REQUEST, "验证码已失效，请重新获取");
+            throw new BizException(ErrorCode.BAD_REQUEST, CAPTCHA_ERROR_MESSAGE);
         }
         if (!cachedCode.equalsIgnoreCase(code.trim())) {
-            throw new BizException(ErrorCode.BAD_REQUEST, "验证码错误");
+            throw new BizException(ErrorCode.BAD_REQUEST, CAPTCHA_ERROR_MESSAGE);
         }
     }
 }

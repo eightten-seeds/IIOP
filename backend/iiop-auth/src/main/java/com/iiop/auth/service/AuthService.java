@@ -31,13 +31,13 @@ public class AuthService {
 
     @Transactional
     public LoginResponse login(LoginRequest request) {
-        captchaService.verifyAndConsume(request.captchaKey(), request.captchaCode());
+        captchaService.verifyAndConsume(request.captchaId(), request.captchaCode());
         SysUser user = users.selectOne(Wrappers.<SysUser>lambdaQuery().eq(SysUser::getUsername, request.username()));
         if (user == null || !encoder.matches(request.password(), user.getPasswordHash())) {
-            throw new BizException(ErrorCode.UNAUTHORIZED, "用户名或密码错误");
+            throw loginFailed();
         }
         if (!"ENABLED".equals(user.getStatus())) {
-            throw new BizException(ErrorCode.FORBIDDEN, "账号已被停用或锁定，请联系管理员");
+            throw loginFailed();
         }
         AuthSnapshot snapshot = snapshot(user.getId());
         StpUtil.login(user.getId(), new SaLoginModel().setDevice("api"));
@@ -56,15 +56,12 @@ public class AuthService {
         if (!encoder.matches(request.oldPassword(), user.getPasswordHash())) {
             throw new BizException(ErrorCode.BAD_REQUEST, "原密码不正确");
         }
-        if (request.newPassword() == null || request.newPassword().isBlank() || request.newPassword().length() < 6) {
-            throw new BizException(ErrorCode.BAD_REQUEST, "新密码长度不能少于6位");
-        }
         if (Objects.equals(request.oldPassword(), request.newPassword())) {
             throw new BizException(ErrorCode.BAD_REQUEST, "新密码不能与原密码相同");
         }
         user.setPasswordHash(encoder.encode(request.newPassword()));
         users.updateById(user);
-        StpUtil.logout();
+        StpUtil.logout(id);
     }
 
     public MeResponse me() {

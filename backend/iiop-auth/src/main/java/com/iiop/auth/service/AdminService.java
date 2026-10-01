@@ -58,7 +58,6 @@ public class AdminService {
     }
     @Transactional public void deleteUser(Long id){requireUser(id);if(hasSuperAdminRole(id)){requireRolePermissionForSuperAdminChange();if(isSelf(id))throw new BizException(ErrorCode.CONFLICT,"超级管理员不能删除自己");throw new BizException(ErrorCode.CONFLICT,"仍拥有超级管理员角色的用户不能删除");}StpUtil.logout(id);userRoles.delete(Wrappers.<SysUserRole>lambdaQuery().eq(SysUserRole::getUserId,id));users.deleteById(id);}
     @Transactional public void resetPassword(Long id, ResetPasswordRequest req){
-        if(req.newPassword()==null||req.newPassword().isBlank()||req.newPassword().length()<6)throw new BizException(ErrorCode.BAD_REQUEST,"新密码长度不能少于6位");
         if(isSelf(id))throw new BizException(ErrorCode.BAD_REQUEST,"不能在用户列表中重置自身密码，请使用个人中心修改密码");
         SysUser u=requireUser(id);
         if(hasSuperAdminRole(id))requireRolePermissionForSuperAdminChange();

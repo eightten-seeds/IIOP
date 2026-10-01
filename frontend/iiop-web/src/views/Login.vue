@@ -7,8 +7,8 @@ import { useAuthStore } from '../stores/auth';
 import { request } from '../api/request';
 
 interface CaptchaData {
-  captchaKey: string;
-  imageBase64: string;
+  captchaId: string;
+  image: string;
 }
 
 const router = useRouter();
@@ -23,7 +23,7 @@ const loginForm = reactive({
 const rememberUsername = ref(false);
 const loading = ref(false);
 const captchaLoading = ref(false);
-const captchaKey = ref('');
+const captchaId = ref('');
 const captchaImage = ref('');
 const loginError = ref('');
 
@@ -34,8 +34,8 @@ async function fetchCaptcha() {
   loginForm.captchaCode = '';
   try {
     const data = await request.get<never, CaptchaData>('/api/auth/captcha');
-    captchaKey.value = data.captchaKey;
-    captchaImage.value = data.imageBase64;
+    captchaId.value = data.captchaId;
+    captchaImage.value = data.image;
   } catch {
     ElMessage.error('获取验证码失败，请检查网络或服务状态');
   } finally {
@@ -60,7 +60,7 @@ async function handleLogin() {
     await auth.login(
       loginForm.username.trim(),
       loginForm.password,
-      captchaKey.value,
+      captchaId.value,
       loginForm.captchaCode.trim()
     );
 

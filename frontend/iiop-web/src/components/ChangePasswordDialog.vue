@@ -30,7 +30,7 @@ const rules: FormRules = {
   ],
   newPassword: [
     { required: true, message: '请输入新密码', trigger: 'blur' },
-    { min: 6, message: '密码长度不能少于6位', trigger: 'blur' },
+    { min: 8, max: 72, message: '密码长度必须为 8~72 位', trigger: 'blur' },
     {
       validator: (_rule, value, callback) => {
         if (value && form.oldPassword && value === form.oldPassword) {
@@ -132,7 +132,8 @@ watch(
           v-model="form.newPassword"
           type="password"
           show-password
-          placeholder="不少于6位，且与原密码不同"
+          maxlength="72"
+          placeholder="8~72 位，且与原密码不同"
         />
       </el-form-item>
       <el-form-item label="确认新密码" prop="confirmPassword">
@@ -140,6 +141,7 @@ watch(
           v-model="form.confirmPassword"
           type="password"
           show-password
+          maxlength="72"
           placeholder="请再次输入新密码"
         />
       </el-form-item>

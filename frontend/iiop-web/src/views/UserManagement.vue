@@ -120,7 +120,7 @@ function openCreate() {
 
 async function createUser() {
   if (!createForm.username.trim()) return void ElMessage.warning('请输入用户名');
-  if (createForm.password.length < 8) return void ElMessage.warning('密码至少需要 8 位');
+  if (createForm.password.length < 8 || createForm.password.length > 72) return void ElMessage.warning('密码长度必须为 8~72 位');
   saving.value = true;
   try {
     await request.post('/api/auth/users', { ...createForm });
@@ -274,8 +274,8 @@ function openResetPassword(row: UserSummary) {
 
 async function submitResetPassword() {
   if (!resetUser.value) return;
-  if (!resetForm.newPassword || resetForm.newPassword.length < 6) {
-    ElMessage.warning('新密码长度不能少于6位');
+  if (!resetForm.newPassword || resetForm.newPassword.length < 8 || resetForm.newPassword.length > 72) {
+    ElMessage.warning('密码长度必须为 8~72 位');
     return;
   }
   if (resetForm.newPassword !== resetForm.confirmPassword) {
@@ -362,7 +362,7 @@ onMounted(async () => {
     <el-dialog v-model="createVisible" title="创建用户" width="600px" :close-on-click-modal="!saving">
       <el-form label-width="100px">
         <el-form-item label="用户名" required><el-input v-model="createForm.username" autocomplete="off" /></el-form-item>
-        <el-form-item label="密码" required><el-input v-model="createForm.password" type="password" show-password autocomplete="new-password" placeholder="至少 8 位" /></el-form-item>
+        <el-form-item label="密码" required><el-input v-model="createForm.password" type="password" show-password autocomplete="new-password" maxlength="72" placeholder="8~72 位" /></el-form-item>
         <el-form-item label="姓名"><el-input v-model="createForm.realName" /></el-form-item>
         <el-form-item label="手机号"><el-input v-model="createForm.phone" /></el-form-item>
         <el-form-item label="邮箱"><el-input v-model="createForm.email" /></el-form-item>
@@ -407,10 +407,10 @@ onMounted(async () => {
           <span>{{ resetUser?.realName ? `${resetUser.realName}（${resetUser.username}）` : resetUser?.username }}</span>
         </el-form-item>
         <el-form-item label="新密码" required>
-          <el-input v-model="resetForm.newPassword" type="password" show-password placeholder="不少于 6 位" />
+          <el-input v-model="resetForm.newPassword" type="password" show-password maxlength="72" placeholder="8~72 位" />
         </el-form-item>
         <el-form-item label="确认密码" required>
-          <el-input v-model="resetForm.confirmPassword" type="password" show-password placeholder="请再次输入新密码" />
+          <el-input v-model="resetForm.confirmPassword" type="password" show-password maxlength="72" placeholder="请再次输入新密码" />
         </el-form-item>
       </el-form>
       <template #footer>

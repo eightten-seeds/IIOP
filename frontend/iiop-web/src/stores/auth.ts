@@ -45,8 +45,8 @@ export const useAuthStore = defineStore('auth', {
       if (role === 'MAINTAINER') return '/maintenance/work-orders';
       return '/dashboard';
     },
-    async login(username: string, password: string, captchaKey?: string, captchaCode?: string) {
-      const data = await request.post<never, IdentityResponse>('/api/auth/login', { username, password, captchaKey, captchaCode });
+    async login(username: string, password: string, captchaId: string, captchaCode: string) {
+      const data = await request.post<never, IdentityResponse>('/api/auth/login', { username, password, captchaId, captchaCode });
       this.token = data.tokenValue ?? '';
       this.applyIdentity(data);
       await this.refreshUnread();

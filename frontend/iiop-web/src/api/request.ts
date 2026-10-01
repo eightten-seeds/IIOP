@@ -38,11 +38,6 @@ request.interceptors.response.use(
   },
   (error: AxiosError<ApiEnvelope>) => {
     const status = error.response?.status;
-    const silentStatuses = error.config?.silentStatuses || [];
-    if (status && silentStatuses.includes(status)) {
-      return Promise.reject(error);
-    }
-    const backendMessage = error.response?.data?.message || error.response?.data?.msg;
     if (status === 401) {
       if (!handlingUnauthorized) {
         handlingUnauthorized = true;
@@ -50,7 +45,14 @@ request.interceptors.response.use(
         window.location.hash = '#/login';
         window.setTimeout(() => { handlingUnauthorized = false; }, 800);
       }
-    } else if (status === 403) {
+      return Promise.reject(error);
+    }
+    const silentStatuses = error.config?.silentStatuses || [];
+    if (status && silentStatuses.includes(status)) {
+      return Promise.reject(error);
+    }
+    const backendMessage = error.response?.data?.message || error.response?.data?.msg;
+    if (status === 403) {
       ElMessage.error(backendMessage ? `当前账号无权执行此操作：${backendMessage}` : '当前账号无权执行此操作');
     } else if (status === 409) {
       ElMessage.warning(backendMessage || '业务状态已变化，请刷新后重试');
