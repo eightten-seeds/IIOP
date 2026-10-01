@@ -14,11 +14,12 @@ import NoRole from '../views/NoRole.vue';
 import UserManagement from '../views/UserManagement.vue';
 import RoleReadOnly from '../views/RoleReadOnly.vue';
 import PermissionReadOnly from '../views/PermissionReadOnly.vue';
+import DeviceList from '../views/DeviceList.vue';
+import DeviceDetail from '../views/DeviceDetail.vue';
 
 type ResourceRoute = [path: string, title: string, api: string, permission: string | null];
 
 const resources: ResourceRoute[] = [
-  ['devices', '设备', '/api/device/devices', 'device:view'],
   ['inspection/templates', '巡检模板', '/api/inspection/templates', 'inspection:view'],
   ['inspection/plans', '巡检计划', '/api/inspection/plans', 'inspection:view'],
   ['inspection/tasks', '巡检任务', '/api/inspection/tasks', 'inspection:view'],
@@ -31,6 +32,8 @@ const resources: ResourceRoute[] = [
 
 const children: RouteRecordRaw[] = [
   { path: '/dashboard', component: Dashboard, meta: { title: '工作台', permission: 'dashboard:view' } },
+  { path: '/devices', component: DeviceList, meta: { title: '设备档案', permission: 'device:view' } },
+  { path: '/devices/:id', component: DeviceDetail, meta: { title: '设备详情', permission: 'device:view' } },
   { path: '/system/users', component: UserManagement, meta: { title: '用户管理', permission: 'system:user:view' } },
   { path: '/system/roles', component: RoleReadOnly, meta: { title: '角色查看', permission: 'system:role:view' } },
   { path: '/system/permissions', component: PermissionReadOnly, meta: { title: '权限查看', permission: 'system:permission:view' } }
