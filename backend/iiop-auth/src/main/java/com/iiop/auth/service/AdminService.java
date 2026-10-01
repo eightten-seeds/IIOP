@@ -57,9 +57,23 @@ public class AdminService {
         StpUtil.logout(id);
     }
     @Transactional public void deleteUser(Long id){requireUser(id);if(hasSuperAdminRole(id)){requireRolePermissionForSuperAdminChange();if(isSelf(id))throw new BizException(ErrorCode.CONFLICT,"超级管理员不能删除自己");throw new BizException(ErrorCode.CONFLICT,"仍拥有超级管理员角色的用户不能删除");}StpUtil.logout(id);userRoles.delete(Wrappers.<SysUserRole>lambdaQuery().eq(SysUserRole::getUserId,id));users.deleteById(id);}
+    @Transactional public void resetPassword(Long id, ResetPasswordRequest req){
+        if(req.newPassword()==null||req.newPassword().isBlank()||req.newPassword().length()<6)throw new BizException(ErrorCode.BAD_REQUEST,"新密码长度不能少于6位");
+        if(isSelf(id))throw new BizException(ErrorCode.BAD_REQUEST,"不能在用户列表中重置自身密码，请使用个人中心修改密码");
+        SysUser u=requireUser(id);
+        if(hasSuperAdminRole(id))requireRolePermissionForSuperAdminChange();
+        u.setPasswordHash(encoder.encode(req.newPassword()));
+        users.updateById(u);
+        StpUtil.logout(id);
+    }
 
     public List<RoleView> roles(){return roles.selectList(Wrappers.<SysRole>lambdaQuery().orderByAsc(SysRole::getRoleCode)).stream().map(this::view).toList();}
     public RoleView role(Long id){return view(requireRole(id));}
+    public List<PermissionView> rolePermissions(Long id){
+        requireRole(id);
+        List<Long> pids=rolePermissions.selectList(Wrappers.<SysRolePermission>lambdaQuery().eq(SysRolePermission::getRoleId,id)).stream().map(SysRolePermission::getPermissionId).toList();
+        return pids.isEmpty()?List.of():permissions.selectBatchIds(pids).stream().filter(p->"ENABLED".equals(p.getStatus())).sorted(Comparator.comparing(SysPermission::getSortOrder)).map(this::view).toList();
+    }
     @Transactional public RoleView createRole(RoleRequest req){throw frozen();}
     @Transactional public RoleView updateRole(Long id,RoleRequest req){throw frozen();}
     @Transactional public void deleteRole(Long id){throw frozen();}

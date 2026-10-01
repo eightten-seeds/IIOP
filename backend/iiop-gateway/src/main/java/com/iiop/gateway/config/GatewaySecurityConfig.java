@@ -15,7 +15,7 @@ public class GatewaySecurityConfig {
         return new SaReactorFilter()
                 .addInclude("/api/**", "/ws/**")
                 .setAuth(obj -> SaRouter.match("/api/**")
-                        .notMatch("/api/auth/login")
+                        .notMatch("/api/auth/login", "/api/auth/captcha")
                         .notMatchMethod("OPTIONS")
                         .check(StpUtil::checkLogin))
                 .setError(error -> {

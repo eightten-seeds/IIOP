@@ -86,10 +86,16 @@ onMounted(() => {
   });
 });
 
+import ChangePasswordDialog from '../components/ChangePasswordDialog.vue';
+
+const changePasswordVisible = ref(false);
+
 async function handleUserCommand(command: string) {
   if (command === 'logout') {
     await auth.logout();
     await router.push('/login');
+  } else if (command === 'password') {
+    changePasswordVisible.value = true;
   }
 }
 </script>
@@ -185,7 +191,8 @@ async function handleUserCommand(command: string) {
             </span>
             <template #dropdown>
               <el-dropdown-menu>
-                <el-dropdown-item command="logout">退出登录</el-dropdown-item>
+                <el-dropdown-item command="password">修改密码</el-dropdown-item>
+                <el-dropdown-item divided command="logout">退出登录</el-dropdown-item>
               </el-dropdown-menu>
             </template>
           </el-dropdown>
@@ -193,6 +200,7 @@ async function handleUserCommand(command: string) {
       </el-header>
       <el-main><RouterView /></el-main>
     </el-container>
+    <ChangePasswordDialog v-model:visible="changePasswordVisible" />
   </el-container>
 </template>
 

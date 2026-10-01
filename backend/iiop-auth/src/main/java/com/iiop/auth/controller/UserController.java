@@ -19,5 +19,6 @@ public class UserController {
     @SaCheckPermission("system:user:update") @PutMapping("/{id}") public Result<UserSummary> update(@PathVariable Long id,@RequestBody UserUpdateRequest request){return Result.success(service.updateUser(id,request));}
     @SaCheckPermission("system:user:update") @PutMapping("/{id}/status") public Result<Void> status(@PathVariable Long id,@Valid @RequestBody StatusRequest request){service.updateStatus(id,request);return Result.success();}
     @SaCheckPermission("system:user:role") @PutMapping("/{id}/roles") public Result<Void> roles(@PathVariable Long id,@Valid @RequestBody IdListRequest request){service.updateUserRoles(id,request);return Result.success();}
+    @SaCheckPermission("system:user:update") @PutMapping("/{id}/password") public Result<Void> resetPassword(@PathVariable Long id,@Valid @RequestBody ResetPasswordRequest request){service.resetPassword(id,request);return Result.success();}
     @SaCheckPermission("system:user:delete") @DeleteMapping("/{id}") public Result<Void> delete(@PathVariable Long id){service.deleteUser(id);return Result.success();}
 }

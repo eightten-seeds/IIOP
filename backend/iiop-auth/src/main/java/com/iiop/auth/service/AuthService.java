@@ -20,23 +20,51 @@ public class AuthService {
     public static final String SESSION_PERMISSIONS = "iiop:permissions";
     private final SysUserMapper users; private final SysRoleMapper roles; private final SysPermissionMapper permissions;
     private final SysUserRoleMapper userRoles; private final SysRolePermissionMapper rolePermissions; private final PasswordEncoder encoder;
+    private final CaptchaService captchaService;
 
     public AuthService(SysUserMapper users, SysRoleMapper roles, SysPermissionMapper permissions,
-            SysUserRoleMapper userRoles, SysRolePermissionMapper rolePermissions, PasswordEncoder encoder) {
+            SysUserRoleMapper userRoles, SysRolePermissionMapper rolePermissions, PasswordEncoder encoder,
+            CaptchaService captchaService) {
         this.users=users; this.roles=roles; this.permissions=permissions; this.userRoles=userRoles;
-        this.rolePermissions=rolePermissions; this.encoder=encoder;
+        this.rolePermissions=rolePermissions; this.encoder=encoder; this.captchaService=captchaService;
     }
 
     @Transactional
     public LoginResponse login(LoginRequest request) {
+        captchaService.verifyAndConsume(request.captchaKey(), request.captchaCode());
         SysUser user = users.selectOne(Wrappers.<SysUser>lambdaQuery().eq(SysUser::getUsername, request.username()));
-        if (user == null || !encoder.matches(request.password(), user.getPasswordHash())) throw loginFailed();
-        if (!"ENABLED".equals(user.getStatus())) throw loginFailed();
+        if (user == null || !encoder.matches(request.password(), user.getPasswordHash())) {
+            throw new BizException(ErrorCode.UNAUTHORIZED, "用户名或密码错误");
+        }
+        if (!"ENABLED".equals(user.getStatus())) {
+            throw new BizException(ErrorCode.FORBIDDEN, "账号已被停用或锁定，请联系管理员");
+        }
         AuthSnapshot snapshot = snapshot(user.getId());
         StpUtil.login(user.getId(), new SaLoginModel().setDevice("api"));
         StpUtil.getSession().set(SESSION_ROLES, snapshot.roles()).set(SESSION_PERMISSIONS, snapshot.permissions());
         user.setLastLoginTime(LocalDateTime.now()); users.updateById(user);
         return new LoginResponse(StpUtil.getTokenName(), StpUtil.getTokenValue(), summary(user), snapshot.roles(), snapshot.permissions());
+    }
+
+    @Transactional
+    public void changePassword(ChangePasswordRequest request) {
+        Long id = StpUtil.getLoginIdAsLong();
+        SysUser user = requireUser(id);
+        if (request.oldPassword() == null || request.oldPassword().isBlank()) {
+            throw new BizException(ErrorCode.BAD_REQUEST, "原密码不能为空");
+        }
+        if (!encoder.matches(request.oldPassword(), user.getPasswordHash())) {
+            throw new BizException(ErrorCode.BAD_REQUEST, "原密码不正确");
+        }
+        if (request.newPassword() == null || request.newPassword().isBlank() || request.newPassword().length() < 6) {
+            throw new BizException(ErrorCode.BAD_REQUEST, "新密码长度不能少于6位");
+        }
+        if (Objects.equals(request.oldPassword(), request.newPassword())) {
+            throw new BizException(ErrorCode.BAD_REQUEST, "新密码不能与原密码相同");
+        }
+        user.setPasswordHash(encoder.encode(request.newPassword()));
+        users.updateById(user);
+        StpUtil.logout();
     }
 
     public MeResponse me() {

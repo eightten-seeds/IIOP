@@ -24,12 +24,25 @@ import reactor.core.publisher.Mono;
 
 @Component
 public class LoginRateLimitFilter implements GlobalFilter, Ordered {
-    static final String RESOURCE="gateway-login";
+    static final String RESOURCE_LOGIN="gateway-login";
+    static final String RESOURCE_CAPTCHA="gateway-captcha";
     private final ObjectMapper objectMapper;
-    public LoginRateLimitFilter(ObjectMapper objectMapper){this.objectMapper=objectMapper;FlowRule rule=new FlowRule(RESOURCE);rule.setGrade(RuleConstant.FLOW_GRADE_QPS);rule.setCount(2);FlowRuleManager.loadRules(List.of(rule));}
+    public LoginRateLimitFilter(ObjectMapper objectMapper){
+        this.objectMapper=objectMapper;
+        FlowRule loginRule=new FlowRule(RESOURCE_LOGIN);loginRule.setGrade(RuleConstant.FLOW_GRADE_QPS);loginRule.setCount(2);
+        FlowRule captchaRule=new FlowRule(RESOURCE_CAPTCHA);captchaRule.setGrade(RuleConstant.FLOW_GRADE_QPS);captchaRule.setCount(5);
+        FlowRuleManager.loadRules(List.of(loginRule, captchaRule));
+    }
     @Override public Mono<Void> filter(ServerWebExchange exchange,GatewayFilterChain chain){
-        if(exchange.getRequest().getMethod()!=HttpMethod.POST||!"/api/auth/login".equals(exchange.getRequest().getPath().value()))return chain.filter(exchange);
-        Entry entry;try{entry=SphU.entry(RESOURCE);}catch(BlockException ex){return blocked(exchange);}
+        String path = exchange.getRequest().getPath().value();
+        HttpMethod method = exchange.getRequest().getMethod();
+        String resource = null;
+        if(method == HttpMethod.POST && "/api/auth/login".equals(path)) resource = RESOURCE_LOGIN;
+        else if(method == HttpMethod.GET && "/api/auth/captcha".equals(path)) resource = RESOURCE_CAPTCHA;
+        if(resource == null) return chain.filter(exchange);
+
+        Entry entry;
+        try{entry=SphU.entry(resource);}catch(BlockException ex){return blocked(exchange);}
         return chain.filter(exchange).doFinally(signal->entry.exit());
     }
     private Mono<Void> blocked(ServerWebExchange exchange){

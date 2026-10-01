@@ -71,6 +71,11 @@ const editForm = reactive<UserEditForm>({ realName: '', phone: '', email: '', av
 const editTouched = reactive<Record<keyof UserEditForm, boolean>>({ realName: false, phone: false, email: false, avatarUrl: false });
 const editUser = ref<UserSummary | null>(null);
 
+const resetVisible = ref(false);
+const resetSaving = ref(false);
+const resetUser = ref<UserSummary | null>(null);
+const resetForm = reactive({ newPassword: '', confirmPassword: '' });
+
 const canManageSuperAdmin = computed(() => auth.roles.includes('SUPER_ADMIN') && auth.can('system:role:permission'));
 
 function resetCreateForm() {
@@ -256,6 +261,39 @@ async function deleteUser(row: UserSummary) {
   }
 }
 
+function openResetPassword(row: UserSummary) {
+  if (row.id === auth.currentUser?.id) {
+    ElMessage.warning('不能在用户列表中重置自身密码，请使用右上角个人中心修改');
+    return;
+  }
+  resetUser.value = row;
+  resetForm.newPassword = '';
+  resetForm.confirmPassword = '';
+  resetVisible.value = true;
+}
+
+async function submitResetPassword() {
+  if (!resetUser.value) return;
+  if (!resetForm.newPassword || resetForm.newPassword.length < 6) {
+    ElMessage.warning('新密码长度不能少于6位');
+    return;
+  }
+  if (resetForm.newPassword !== resetForm.confirmPassword) {
+    ElMessage.warning('两次输入的新密码不一致');
+    return;
+  }
+  resetSaving.value = true;
+  try {
+    await request.put(`/api/auth/users/${resetUser.value.id}/password`, {
+      newPassword: resetForm.newPassword
+    });
+    ElMessage.success(`用户“${resetUser.value.username}”密码已重置，该账号已被强制下线`);
+    resetVisible.value = false;
+  } finally {
+    resetSaving.value = false;
+  }
+}
+
 onMounted(async () => {
   try {
     await Promise.all([load(), loadRoles()]);
@@ -297,10 +335,19 @@ onMounted(async () => {
         <el-table-column prop="username" label="用户名" min-width="150" />
         <el-table-column prop="realName" label="姓名" min-width="140"><template #default="scope">{{ scope.row.realName || '-' }}</template></el-table-column>
         <el-table-column prop="status" label="状态" width="110"><template #default="scope"><el-tag :type="scope.row.status==='ENABLED'?'success':scope.row.status==='LOCKED'?'danger':'info'">{{ displayValue(scope.row.status) }}</el-tag></template></el-table-column>
-        <el-table-column label="操作" min-width="380" fixed="right">
+        <el-table-column label="操作" min-width="440" fixed="right">
           <template #default="scope">
             <el-button v-if="auth.can('system:user:update')" link :loading="editLoading" @click="openEdit(scope.row)">编辑资料</el-button>
             <el-button v-if="auth.can('system:user:role')" link :loading="roleLoading" @click="openRoles(scope.row)">分配角色</el-button>
+            <el-button
+              v-if="auth.can('system:user:update')"
+              link
+              :disabled="scope.row.id === auth.currentUser?.id"
+              :title="scope.row.id === auth.currentUser?.id ? '不能在此重置自身密码，请使用右上角个人中心修改' : ''"
+              @click="openResetPassword(scope.row)"
+            >
+              重置密码
+            </el-button>
             <el-button v-if="auth.can('system:user:update')&&scope.row.status!=='ENABLED'" link :loading="statusSavingId===scope.row.id" @click="updateStatus(scope.row,'ENABLED')">启用</el-button>
             <el-button v-if="auth.can('system:user:update')&&scope.row.status!=='DISABLED'" link :loading="statusSavingId===scope.row.id" @click="updateStatus(scope.row,'DISABLED')">停用</el-button>
             <el-button v-if="auth.can('system:user:update')&&scope.row.status!=='LOCKED'" link :loading="statusSavingId===scope.row.id" @click="updateStatus(scope.row,'LOCKED')">锁定</el-button>
@@ -345,6 +392,31 @@ onMounted(async () => {
       </el-checkbox-group>
       <el-alert title="保存时提交当前完整岗位集合；已有岗位已从服务端加载并回显。" type="info" :closable="false" show-icon />
       <template #footer><el-button :disabled="saving" @click="roleVisible=false">取消</el-button><el-button type="primary" :loading="saving" @click="saveRoles">保存角色</el-button></template>
+    </el-dialog>
+
+    <el-dialog v-model="resetVisible" title="重置用户密码" width="440px" :close-on-click-modal="!resetSaving">
+      <el-alert
+        title="重置密码后，目标用户的当前所有在线会话将被立即强制下线。"
+        type="warning"
+        :closable="false"
+        show-icon
+        style="margin-bottom: 18px"
+      />
+      <el-form label-width="90px">
+        <el-form-item label="目标用户">
+          <span>{{ resetUser?.realName ? `${resetUser.realName}（${resetUser.username}）` : resetUser?.username }}</span>
+        </el-form-item>
+        <el-form-item label="新密码" required>
+          <el-input v-model="resetForm.newPassword" type="password" show-password placeholder="不少于 6 位" />
+        </el-form-item>
+        <el-form-item label="确认密码" required>
+          <el-input v-model="resetForm.confirmPassword" type="password" show-password placeholder="请再次输入新密码" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button :disabled="resetSaving" @click="resetVisible=false">取消</el-button>
+        <el-button type="primary" :loading="resetSaving" @click="submitResetPassword">确认重置</el-button>
+      </template>
     </el-dialog>
   </section>
 </template>
