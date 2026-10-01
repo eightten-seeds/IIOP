@@ -6,7 +6,7 @@ import { ElMessage, ElMessageBox } from 'element-plus';
 import { request } from '../api/request';
 import { useAuthStore } from '../stores/auth';
 import type { Device, UserSummary } from '../types/device';
-import type { InspectionAbnormal, ResultStatus, Severity, TaskDetailData, TaskItem, TemplateItem } from '../types/inspection';
+import type { InspectionAbnormal, ResultStatus, Severity, TaskDetailData, TaskItem } from '../types/inspection';
 import { displayValue } from '../utils/display';
 
 interface ItemDraft { actualValue: string | number | null; resultStatus: ResultStatus; remark: string; }
@@ -24,7 +24,6 @@ const completing = ref(false);
 const savingIds = ref<Set<string>>(new Set());
 const dirtyIds = ref<Set<string>>(new Set());
 const drafts = reactive<Record<string, ItemDraft>>({});
-const itemHints = reactive<Record<string, string>>({});
 const abnormalVisible = ref(false);
 const abnormalSaving = ref(false);
 const abnormalForm = reactive<{ title: string; description: string; severity: Severity; taskItemId: string }>({ title: '', description: '', severity: 'MEDIUM', taskItemId: '' });
@@ -64,9 +63,6 @@ async function load() {
   try {
     const value = await request.get<never, TaskDetailData>(`/api/inspection/tasks/${route.params.id}`);
     data.value = value;
-    const templateItems = await request.get<never, TemplateItem[]>(`/api/inspection/templates/${value.task.templateId}/items`);
-    Object.keys(itemHints).forEach(key => delete itemHints[key]);
-    templateItems.forEach(item => { if (item.abnormalHint) itemHints[item.id] = item.abnormalHint; });
     Object.keys(drafts).forEach(key => delete drafts[key]);
     value.items.forEach(initDraft);
     dirtyIds.value = new Set();
@@ -185,7 +181,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload));
         <el-empty v-if="!items.length" description="该任务没有检查项" />
         <div v-for="item in items" :key="item.id" class="item-card" :class="{dirty:dirtyIds.has(item.id)}">
           <div class="item-title"><div><strong>{{ item.itemName }}</strong><span>{{ item.itemCode }}</span></div><div><el-tag v-if="item.requiredFlag===1" type="warning" effect="plain">必填</el-tag><el-tag effect="plain">{{ displayValue(item.itemType) }}</el-tag><el-tag :type="item.resultStatus==='ABNORMAL'?'danger':item.resultStatus==='NORMAL'?'success':'info'">{{ displayValue(item.resultStatus) }}</el-tag></div></div>
-          <el-descriptions :column="4" size="small"><el-descriptions-item label="标准值">{{ item.standardValue ? displayValue(item.standardValue) : '-' }}</el-descriptions-item><el-descriptions-item label="单位">{{ item.unit || '-' }}</el-descriptions-item><el-descriptions-item label="允许范围">{{ item.lowerLimit ?? '-' }} ～ {{ item.upperLimit ?? '-' }}</el-descriptions-item><el-descriptions-item label="检查方法">{{ item.inspectionMethod || '-' }}</el-descriptions-item><el-descriptions-item label="异常提示" :span="4">{{ itemHints[item.templateItemId] || '-' }}</el-descriptions-item></el-descriptions>
+          <el-descriptions :column="4" size="small"><el-descriptions-item label="标准值">{{ item.standardValue ? displayValue(item.standardValue) : '-' }}</el-descriptions-item><el-descriptions-item label="单位">{{ item.unit || '-' }}</el-descriptions-item><el-descriptions-item label="允许范围">{{ item.lowerLimit ?? '-' }} ～ {{ item.upperLimit ?? '-' }}</el-descriptions-item><el-descriptions-item label="检查方法">{{ item.inspectionMethod || '-' }}</el-descriptions-item></el-descriptions>
           <el-alert v-if="item.itemType==='PHOTO'" title="第一版暂不支持图片巡检执行" type="warning" show-icon :closable="false" />
           <el-form v-else label-width="90px" class="result-form">
             <el-form-item label="实际结果" required>
