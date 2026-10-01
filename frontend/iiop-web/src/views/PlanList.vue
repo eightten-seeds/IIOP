@@ -41,6 +41,13 @@ const deviceLabel = (device: Device) => `${device.deviceName}（${device.deviceC
 const templateLabel = (template: InspectionTemplate) => `${template.templateName}（${template.templateCode} / v${template.version}）`;
 const userLabel = (user: UserSummary) => `${user.realName || user.username}（${user.username}）`;
 const dateTime = (value: string | null) => value ? value.replace('T', ' ').slice(0, 16) : '尚未生成';
+const localDate = () => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
 
 async function searchDevices(keyword = '') {
   deviceLoading.value = true;
@@ -194,7 +201,7 @@ async function savePlan() {
   if (templateBlocked.value) return void ElMessage.warning('该模板包含第一版无法执行的必填 PHOTO 检查项，请先调整模板。');
   saving.value = true;
   try {
-    const payload = { ...form, startDate: form.startDate || new Date().toISOString().slice(0, 10), cronExpression: form.scheduleType === 'CRON' ? form.cronExpression.trim() : null };
+    const payload = { ...form, startDate: form.startDate || localDate(), cronExpression: form.scheduleType === 'CRON' ? form.cronExpression.trim() : null };
     if (editingId.value) await request.put(`/api/inspection/plans/${editingId.value}`, payload);
     else await request.post('/api/inspection/plans', payload);
     ElMessage.success(editingId.value ? '巡检计划更新成功' : '巡检计划创建成功');

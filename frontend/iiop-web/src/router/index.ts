@@ -10,6 +10,7 @@ import WorkOrderDetail from '../views/WorkOrderDetail.vue';
 import AiDetail from '../views/AiDetail.vue';
 import Forbidden from '../views/Forbidden.vue';
 import NoRole from '../views/NoRole.vue';
+import IdentityUnavailable from '../views/IdentityUnavailable.vue';
 import NotFound from '../views/NotFound.vue';
 import UserManagement from '../views/UserManagement.vue';
 import RoleReadOnly from '../views/RoleReadOnly.vue';
@@ -290,6 +291,7 @@ const router = createRouter({
   history: createWebHashHistory(),
   routes: [
     { path: '/login', component: Login },
+    { path: '/identity-unavailable', component: IdentityUnavailable, meta: { title: '无法验证登录状态' } },
     { path: '/no-role', component: NoRole, meta: { title: '尚未分配岗位' } },
     { path: '/403', component: Forbidden, meta: { title: '无权访问' } },
     { path: '/', component: Layout, children }
@@ -299,24 +301,32 @@ const router = createRouter({
 router.beforeEach(async (to) => {
   const auth = useAuthStore();
   if (to.path !== '/login' && !auth.token) return '/login';
-  if (auth.token) {
+  if (to.path === '/identity-unavailable') {
+    if (!auth.token) return '/login';
+    if (!auth.identityLoaded) return true;
+    const redirect = typeof to.query.redirect === 'string' && to.query.redirect.startsWith('/')
+      ? to.query.redirect
+      : auth.defaultHome();
+    return redirect === '/identity-unavailable' ? auth.defaultHome() : redirect;
+  }
+  if (auth.token && !auth.identityLoaded) {
     try {
       await auth.ensureIdentity();
     } catch (err: any) {
       const status = err?.response?.status;
       if (status === 401) {
-        // Token genuinely invalid / expired — clear identity, go to login
+        // Only a confirmed 401 proves that the persisted credential is invalid.
         auth.logoutLocal();
         return '/login';
       }
-      // 5xx / network / other transient errors — preserve identity if already loaded
-      if (auth.identityLoaded) {
-        // identity was previously loaded, keep using cached roles/permissions
-      } else {
-        // first load and server is unreachable — cannot verify identity
-        auth.logoutLocal();
-        return '/login';
-      }
+      // Keep the credential, but do not render a protected route until /me succeeds.
+      return {
+        path: '/identity-unavailable',
+        query: {
+          redirect: to.fullPath,
+          reason: err?.response ? 'service' : 'network'
+        }
+      };
     }
   }
   if (to.path === '/login' && auth.token) return auth.defaultHome();
