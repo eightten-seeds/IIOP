@@ -203,6 +203,10 @@ Dashboard 定位为工业设备智能巡检运维总览。
 - 坐标轴和字体正常
 - 状态颜色语义统一
 - 禁止随机彩虹配色
+- 落地 3 个工业业务 ECharts 图表：设备运行状态分布环形图（在线/维护/故障/离线）、设备风险等级横向条形图（低/中/高/严重）、运维与巡检任务负荷柱状图（巡检任务 vs 维修工单状态负荷）；
+- 真实 API 数据驱动：对接 `/api/device/statistics/overview` 概览与各业务模块真实统计接口；
+- 容器适配与销毁：结合 `ResizeObserver` 实现视口缩放与侧边栏折叠时自动 `resize()`，并在组件卸载时执行 `dispose()` 防止显存泄漏；
+- 角色化行动视窗：四角色（SUPER_ADMIN、ADMIN、INSPECTOR、MAINTAINER）均可访问 `/dashboard`，并按当前用户角色差异化呈现待办聚焦与快捷业务入口。
 
 Dashboard 只做总览和入口，不承载设备、巡检、维修的完整 CRUD。
 
@@ -233,7 +237,7 @@ Dashboard 只做总览和入口，不承载设备、巡检、维修的完整 CRU
 
 ### /devices/scene
 
-Three.js 使用独立业务页面。
+Three.js 独立业务页面（`DeviceScene.vue`）：
 
 必须真实使用：
 
@@ -251,6 +255,11 @@ Three.js 使用独立业务页面。
 Three.js 页面需要使用真实设备数据，不做孤立 Demo。
 
 不做复杂数字孪生、动画系统或模型管理平台。
+- 空间坐标映射：从 `/api/device/devices` 读取真实设备列表，提取 `x_pos`、`y_pos`、`z_pos` 映射至 3D 空间坐标（无坐标设备自动按网格阵列排列）；
+- 材质状态与风险感知：设备 Box 材质颜色与状态强绑定（ONLINE 绿色、OFFLINE 灰色、FAULT 红色、MAINTENANCE 橙色），基座外框呈现对应风险等级警示色；
+- 光线投射拾取交互：使用 `THREE.Raycaster` 监听鼠标悬停高亮与点击拾取，选中设备后在右侧滑出业务卡片，展示编码、名称、状态、风险、位置坐标及实时监控指标，并提供“进入设备档案”快速跳转链接；
+- 资源生命周期管理：离开页面时自动调用 `cancelAnimationFrame`，释放 Geometry、Material 显存资源，移除 DOM 事件与渲染节点，杜绝内存泄漏；
+- 列表直通入口：在 `/devices` 列表页头部提供“设备空间视图”常驻入口按钮，无缝进入 3D 监控模式。
 
 ## 8. 巡检模块
 
@@ -276,6 +285,10 @@ Vue Flow 支持的业务节点：
 - END
 
 需要对节点、连线、选中状态进行基础视觉定制，禁止直接保留默认 Demo 外观。
+- Vue Flow V1 协议规范：流程图以 JSON 存储于 `inspection_template.flow_definition`，采用 V1 格式规范（包含 `version: "1.0"`、`nodes: [...]`、`edges: [...]`，节点包含 `id`、`type`、`position`、`label` 等）；
+- 检查项联动生成：检查项列表与流程节点双向同步，自动为检查项生成 `CHECK_ITEM` 节点，支持节点拖拽、连线新增连接与点击删除；
+- 格式容错与回显：加载旧版或非 V1 格式流程定义时弹出醒目警告提示，并支持一键重新生成标准 V1 流程图；
+- 保存与持久化：点击“保存流程图”后调用 `PUT /api/inspection/templates/{id}` 完整持久化至数据库，再次进入或刷新页面均稳定回显。
 
 ### /inspection/plans
 
@@ -460,6 +473,11 @@ ws://127.0.0.1:8080/ws/notifications?token=...
 - 收到真实 WS 消息后自然提示
 - 刷新通知列表
 - 简单定时重连
+- 原生 WebSocket 服务（`notificationSocket.ts`）：使用浏览器原生 `new WebSocket`，动态解析网关 ws 协议与地址，通过 Query Param `token` 传递凭据（控制台日志严格遮蔽敏感信息）；
+- 指数退避与心跳保活：连接断开后执行指数退避重连（1s → 2s → 4s ... 最大 30s），支持 30s 心跳探测与无缝恢复；
+- 专用通知中心（`NotificationList.vue`）：取代原有通用页面，支持真实未读高亮、分页查看、单条标记已读与“全部标记已读”；
+- 无刷新实时闭环：收到后端工单派发、异常预警等 WS 推送时，触发右下角浮窗通知（`ElNotification`）并自动刷新全局未读 Badge 计数与当前通知列表；
+- 业务直通路由：通知项支持点击快捷跳转至对应维修工单或关联详情。
 
 WebSocket 是实时提醒，sys_notification 仍是通知事实来源。
 
