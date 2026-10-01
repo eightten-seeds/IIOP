@@ -194,7 +194,7 @@ async function savePlan() {
   if (templateBlocked.value) return void ElMessage.warning('该模板包含第一版无法执行的必填 PHOTO 检查项，请先调整模板。');
   saving.value = true;
   try {
-    const payload = { ...form, cronExpression: form.scheduleType === 'CRON' ? form.cronExpression.trim() : null };
+    const payload = { ...form, startDate: form.startDate || new Date().toISOString().slice(0, 10), cronExpression: form.scheduleType === 'CRON' ? form.cronExpression.trim() : null };
     if (editingId.value) await request.put(`/api/inspection/plans/${editingId.value}`, payload);
     else await request.post('/api/inspection/plans', payload);
     ElMessage.success(editingId.value ? '巡检计划更新成功' : '巡检计划创建成功');

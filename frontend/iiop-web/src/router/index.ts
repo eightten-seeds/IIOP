@@ -302,9 +302,21 @@ router.beforeEach(async (to) => {
   if (auth.token) {
     try {
       await auth.ensureIdentity();
-    } catch {
-      auth.logoutLocal();
-      return '/login';
+    } catch (err: any) {
+      const status = err?.response?.status;
+      if (status === 401) {
+        // Token genuinely invalid / expired — clear identity, go to login
+        auth.logoutLocal();
+        return '/login';
+      }
+      // 5xx / network / other transient errors — preserve identity if already loaded
+      if (auth.identityLoaded) {
+        // identity was previously loaded, keep using cached roles/permissions
+      } else {
+        // first load and server is unreachable — cannot verify identity
+        auth.logoutLocal();
+        return '/login';
+      }
     }
   }
   if (to.path === '/login' && auth.token) return auth.defaultHome();

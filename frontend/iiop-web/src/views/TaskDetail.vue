@@ -176,7 +176,8 @@ async function completeTask() {
   completing.value = true;
   try {
     await request.post(`/api/inspection/tasks/${route.params.id}/complete`);
-    ElMessage.success('本次巡检已完成');
+    const abnormalCount = items.value.filter(i => i.resultStatus === 'ABNORMAL').length;
+    ElMessage.success(abnormalCount > 0 ? `巡检任务已完成，发现 ${abnormalCount} 项异常。` : '巡检任务已完成，未发现异常。');
     await load();
   } catch (error) { if (isConflict(error)) await load(); }
   finally { completing.value = false; }
