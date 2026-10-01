@@ -70,24 +70,32 @@ Gateway 只做：
 
 实现：
 
-- login
-- logout
-- me
-- 用户 CRUD
+- captcha（图形验证码生成与 Redis 120s TTL 一次性校验，防刷限流）
+- login（验证码校验、账号状态检查、BCrypt 密码比对、Sa-Token 登录）
+- logout（注销当前 Session）
+- me（获取当前用户上下文、角色与 permissions）
+- password（个人修改密码，旧密码校验，新旧不同，成功后登出）
+- users/{id}/password（管理员重置用户密码，自锁保护与 SUPER_ADMIN 保护，成功后踢出目标用户）
+- 用户 CRUD（无公开注册，全部由管理员创建/分配）
 - 用户四角色分配
-- 角色/权限只读查询
+- 角色/权限只读查询（GET /api/auth/roles/{id}/permissions 返回冻结权限清单）
 - SUPER_ADMIN 授予/移除及账号状态保护
 - 通知列表/未读/已读
 - BCrypt
 - Sa-Token + Redis
 
-Gate 2 约束：
+Gate 2 与 Auth 账号生命周期约束：
 
+- 系统无公开注册：用户账号仅允许由具备 `system:user` 权限的管理人员创建；
+- 登录必须携带图形验证码：`GET /api/auth/captcha` 返回 captchaKey 与图片 Base64，Redis 存储 key `iiop:captcha:{key}`，TTL 120s，一次性消费（校验即删除）；
+- 个人修改密码：`PUT /api/auth/password`，校验原密码正确性，新密码与旧密码不得相同，成功后调用 `StpUtil.logout()` 强制下线；
+- 管理员重置密码：`PUT /api/auth/users/{id}/password`，需具备 `system:user` 权限；不可重置当前登录账号自身（避免自锁混淆，自身必须走修改密码流程）；不可重置 SUPER_ADMIN（若非 SUPER_ADMIN 越权）；重置成功后调用 `StpUtil.logoutByLoginId(id)` 踢出目标用户；
+- 角色权限只读：`GET /api/auth/roles/{id}/permissions` 仅供只读矩阵查询，公开业务 API 不允许创建/删除角色、创建/删除 permission 或修改固定角色权限矩阵；
+- Gateway 限流保护：对 `/api/auth/login` 与 `/api/auth/captcha` 配置基础限流（登录 2 QPS，验证码 5 QPS），匿名放行 captcha 与 login。
 - permissions 只由 ENABLED 角色贡献；
 - 用户角色分配只允许四个固定 roleCode；
 - ADMIN 不能授予/移除 SUPER_ADMIN；
 - 当前 SUPER_ADMIN 不能移除自己的 SUPER_ADMIN、禁用/锁定/删除自己；
-- 公开业务 API 不允许创建/删除角色、创建/删除 permission 或修改固定角色权限矩阵；
 - `system:role:permission` 用于 SUPER_ADMIN 角色授予/移除及保护校验，不用于动态改写固定矩阵。
 
 现有 Role / Permission CRUD Controller、Service、permission code 可以保留代码以减少无关返工，但 Gate 2 必须让对应写 API 不再成为第一版可操作产品能力。
