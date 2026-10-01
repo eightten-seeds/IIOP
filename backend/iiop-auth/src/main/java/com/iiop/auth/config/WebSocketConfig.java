@@ -25,7 +25,9 @@ public class WebSocketConfig implements WebSocketConfigurer {
     static class TokenHandshakeInterceptor implements HandshakeInterceptor {
         @Override public boolean beforeHandshake(ServerHttpRequest request,ServerHttpResponse response,WebSocketHandler wsHandler,Map<String,Object> attributes){
             MultiValueMap<String,String> query=UriComponentsBuilder.fromUri(request.getURI()).build().getQueryParams();
-            String token=query.getFirst("token"); Object loginId=token==null?null:StpUtil.getLoginIdByToken(token);
+            String token=request.getHeaders().getFirst(StpUtil.getTokenName());
+            if(token==null||token.isBlank())token=query.getFirst("token");
+            Object loginId=token==null?null:StpUtil.getLoginIdByToken(token);
             if(loginId==null){response.setStatusCode(HttpStatus.UNAUTHORIZED);return false;}
             attributes.put(NotificationWebSocketHandler.USER_ID,Long.valueOf(String.valueOf(loginId)));return true;
         }
