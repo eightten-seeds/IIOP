@@ -3,7 +3,7 @@ import { useAuthStore } from '../stores/auth';
 import Login from '../views/Login.vue';
 import Layout from '../layouts/AdminLayout.vue';
 import Dashboard from '../views/Dashboard.vue';
-import Resource from '../views/Resource.vue';
+import NotificationList from '../views/NotificationList.vue';
 import TaskDetail from '../views/TaskDetail.vue';
 import TemplateDetail from '../views/TemplateDetail.vue';
 import WorkOrderDetail from '../views/WorkOrderDetail.vue';
@@ -16,6 +16,7 @@ import RoleReadOnly from '../views/RoleReadOnly.vue';
 import PermissionReadOnly from '../views/PermissionReadOnly.vue';
 import DeviceList from '../views/DeviceList.vue';
 import DeviceDetail from '../views/DeviceDetail.vue';
+import DeviceScene from '../views/DeviceScene.vue';
 import TemplateList from '../views/TemplateList.vue';
 import PlanList from '../views/PlanList.vue';
 import TaskList from '../views/TaskList.vue';
@@ -35,7 +36,7 @@ const children: RouteRecordRaw[] = [
     meta: {
       title: '工作台',
       permission: 'dashboard:view',
-      roles: ['SUPER_ADMIN', 'ADMIN'],
+      roles: ['SUPER_ADMIN', 'ADMIN', 'INSPECTOR', 'MAINTAINER'],
       breadcrumb: [{ title: '工作台' }],
       menu: { label: '工作台', order: 10, icon: 'Odometer' }
     }
@@ -50,6 +51,17 @@ const children: RouteRecordRaw[] = [
       roles: ['SUPER_ADMIN', 'ADMIN', 'INSPECTOR', 'MAINTAINER'],
       breadcrumb: [{ title: '设备管理' }],
       menu: { label: '设备管理', order: 20, icon: 'Cpu' }
+    }
+  },
+  {
+    path: '/devices/scene',
+    component: DeviceScene,
+    meta: {
+      title: '设备空间视图',
+      permission: 'device:view',
+      roles: ['SUPER_ADMIN', 'ADMIN', 'INSPECTOR', 'MAINTAINER'],
+      activeMenu: '/devices',
+      breadcrumb: [{ title: '设备管理', path: '/devices' }, { title: '设备空间视图' }]
     }
   },
   {
@@ -246,8 +258,7 @@ const children: RouteRecordRaw[] = [
   // 7. 通知中心
   {
     path: '/notifications',
-    component: Resource,
-    props: { title: '通知中心', api: '/api/auth/notifications', kind: 'notifications' },
+    component: NotificationList,
     meta: {
       title: '通知中心',
       permission: null,

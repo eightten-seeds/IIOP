@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import {
   Odometer,
@@ -20,6 +20,8 @@ import {
   getActiveGroupKey,
   type BreadcrumbItem
 } from '../utils/navigation';
+import { notificationSocket } from '../services/notificationSocket';
+import ChangePasswordDialog from '../components/ChangePasswordDialog.vue';
 
 const auth = useAuthStore();
 const router = useRouter();
@@ -61,6 +63,10 @@ const userInitial = computed(() => {
   return name.slice(0, 1).toUpperCase();
 });
 
+const visibleRoles = computed(() => auth.roles.slice(0, 2));
+const hiddenRoles = computed(() => auth.roles.slice(2));
+const hiddenRolesTooltip = computed(() => hiddenRoles.value.map(displayValue).join('、'));
+
 function ensureActiveGroupOpened() {
   if (isCollapse.value) return;
   const group = getActiveGroupKey(route.path, route.meta.activeMenu as string | undefined);
@@ -79,19 +85,36 @@ watch(
   { immediate: true }
 );
 
+watch(
+  () => auth.token,
+  (newToken) => {
+    if (newToken) {
+      notificationSocket.connect(newToken);
+    } else {
+      notificationSocket.close();
+    }
+  }
+);
+
 onMounted(() => {
-  auth.refreshUnread();
+  void auth.refreshUnread();
+  if (auth.token) {
+    notificationSocket.connect(auth.token);
+  }
   nextTick(() => {
     ensureActiveGroupOpened();
   });
 });
 
-import ChangePasswordDialog from '../components/ChangePasswordDialog.vue';
+onUnmounted(() => {
+  notificationSocket.close();
+});
 
 const changePasswordVisible = ref(false);
 
 async function handleUserCommand(command: string) {
   if (command === 'logout') {
+    notificationSocket.close();
     await auth.logout();
     await router.push('/login');
   } else if (command === 'password') {
@@ -176,13 +199,22 @@ async function handleUserCommand(command: string) {
           <span class="user-name" :title="userDisplayName">{{ userDisplayName }}</span>
           <span class="header-roles" aria-label="当前岗位">
             <el-tag
-              v-for="role in auth.roles"
+              v-for="role in visibleRoles"
               :key="role"
               size="small"
               effect="plain"
             >
               {{ displayValue(role) }}
             </el-tag>
+            <el-tooltip
+              v-if="hiddenRoles.length"
+              :content="`更多岗位：${hiddenRolesTooltip}`"
+              placement="bottom"
+            >
+              <el-tag size="small" type="info" effect="plain" style="cursor: pointer;">
+                +{{ hiddenRoles.length }}
+              </el-tag>
+            </el-tooltip>
           </span>
           <el-dropdown trigger="click" @command="handleUserCommand">
             <span class="user-dropdown-link" title="用户操作">
