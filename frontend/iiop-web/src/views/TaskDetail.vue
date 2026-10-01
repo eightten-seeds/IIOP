@@ -84,6 +84,26 @@ async function load() {
 }
 
 function markDirty(id: string) { dirtyIds.value = new Set(dirtyIds.value).add(id); }
+function numberHint(item: TaskItem) {
+  const raw = drafts[item.id]?.actualValue;
+  if (raw === null || raw === undefined || raw === '') return null;
+  const value = Number(raw);
+  if (!Number.isFinite(value) || (item.lowerLimit == null && item.upperLimit == null)) return null;
+  if (item.lowerLimit != null && value < Number(item.lowerLimit)) {
+    const diff = Number((Number(item.lowerLimit) - value).toFixed(4));
+    return { abnormal: true, text: `当前值低于下限 ${diff}${item.unit || ''}，建议判定为异常` };
+  }
+  if (item.upperLimit != null && value > Number(item.upperLimit)) {
+    const diff = Number((value - Number(item.upperLimit)).toFixed(4));
+    return { abnormal: true, text: `当前值高于上限 ${diff}${item.unit || ''}，建议判定为异常` };
+  }
+  return { abnormal: false, text: `当前值在允许范围内（${item.lowerLimit ?? '-∞'} ～ ${item.upperLimit ?? '∞'}${item.unit || ''}），建议判定为正常` };
+}
+function updateNumberResult(item: TaskItem) {
+  const hint = numberHint(item);
+  if (hint) drafts[item.id].resultStatus = hint.abnormal ? 'ABNORMAL' : 'NORMAL';
+  markDirty(item.id);
+}
 function setBoolean(item: TaskItem, value: 'NORMAL' | 'ABNORMAL') {
   drafts[item.id].actualValue = value === 'NORMAL' ? '正常' : '异常';
   drafts[item.id].resultStatus = value;
@@ -92,6 +112,7 @@ function setBoolean(item: TaskItem, value: 'NORMAL' | 'ABNORMAL') {
 function isConflict(error: unknown) { return axios.isAxiosError(error) && error.response?.status === 409; }
 
 async function startTask() {
+  if (starting.value) return;
   starting.value = true;
   try {
     await request.post(`/api/inspection/tasks/${route.params.id}/start`);
@@ -102,6 +123,7 @@ async function startTask() {
 }
 
 async function saveItem(item: TaskItem) {
+  if (savingIds.value.has(item.id)) return;
   const draft = drafts[item.id];
   if (item.itemType !== 'PHOTO' && draft.resultStatus !== 'NORMAL' && draft.resultStatus !== 'ABNORMAL') return void ElMessage.warning('请选择正常或异常结果');
   if (item.itemType === 'NUMBER' && (draft.actualValue === null || draft.actualValue === '')) return void ElMessage.warning('请输入数值检查结果');
@@ -115,7 +137,7 @@ async function saveItem(item: TaskItem) {
     if (data.value && index >= 0) data.value.items[index] = saved;
     initDraft(saved);
     const nextDirty = new Set(dirtyIds.value); nextDirty.delete(item.id); dirtyIds.value = nextDirty;
-    ElMessage.success(`检查项“${item.itemName}”已保存`);
+    ElMessage.success(`检查项“${item.itemName}”已保存，结果：${draft.resultStatus === 'ABNORMAL' ? '异常' : '正常'}`);
   } catch (error) { if (isConflict(error)) await load(); }
   finally { const next = new Set(savingIds.value); next.delete(item.id); savingIds.value = next; }
 }
@@ -131,6 +153,7 @@ async function refreshAbnormals() {
 }
 
 async function createAbnormal() {
+  if (abnormalSaving.value) return;
   if (!abnormalForm.title.trim() || !abnormalForm.description.trim()) return void ElMessage.warning('请填写异常标题和详细描述');
   abnormalSaving.value = true;
   try {
@@ -146,7 +169,7 @@ async function createAbnormal() {
 }
 
 async function completeTask() {
-  if (remainingRequired.value > 0 || hasDirty.value) return;
+  if (completing.value || remainingRequired.value > 0 || hasDirty.value) return;
   try {
     await ElMessageBox.confirm('确认完成本次巡检？完成后检查结果将进入只读状态。', '完成巡检', { type: 'warning', confirmButtonText: '确认完成', cancelButtonText: '取消' });
   } catch { return; }
@@ -159,13 +182,24 @@ async function completeTask() {
   finally { completing.value = false; }
 }
 
+async function beforeCloseAbnormal(done: () => void) {
+  if (abnormalSaving.value) return;
+  if (!abnormalForm.title.trim() && !abnormalForm.description.trim()) return done();
+  try {
+    await ElMessageBox.confirm('异常内容尚未上报，确定放弃吗？', '放弃上报', { type: 'warning' });
+    done();
+  } catch { /* 保留表单 */ }
+}
+
+const isAbnormalDirty = computed(() => abnormalVisible.value && Boolean(abnormalForm.title.trim() || abnormalForm.description.trim()));
+
 function beforeUnload(event: BeforeUnloadEvent) {
-  if (!hasDirty.value) return;
+  if (!hasDirty.value && !isAbnormalDirty.value) return;
   event.preventDefault(); event.returnValue = '';
 }
 onBeforeRouteLeave(async () => {
-  if (!hasDirty.value) return true;
-  try { await ElMessageBox.confirm('存在尚未保存的检查结果，确定离开当前页面吗？', '未保存修改', { type: 'warning', confirmButtonText: '离开', cancelButtonText: '继续填写' }); return true; }
+  if (!hasDirty.value && !isAbnormalDirty.value) return true;
+  try { await ElMessageBox.confirm('存在尚未保存的修改，确定离开当前页面吗？', '未保存修改', { type: 'warning', confirmButtonText: '离开', cancelButtonText: '继续填写' }); return true; }
   catch { return false; }
 });
 onMounted(() => { window.addEventListener('beforeunload', beforeUnload); void load(); });
@@ -197,10 +231,11 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload));
           <el-alert v-if="item.itemType==='PHOTO'" title="第一版暂不支持图片巡检执行" type="warning" show-icon :closable="false" />
           <el-form v-else label-width="90px" class="result-form">
             <el-form-item label="实际结果" required>
-              <el-input-number v-if="item.itemType==='NUMBER'" v-model="drafts[item.id].actualValue as number" :disabled="!canEdit" controls-position="right" @change="markDirty(item.id)" />
+              <el-input-number v-if="item.itemType==='NUMBER'" v-model="drafts[item.id].actualValue as number" :disabled="!canEdit" controls-position="right" @change="updateNumberResult(item)" />
               <el-radio-group v-else-if="item.itemType==='BOOLEAN'" :model-value="drafts[item.id].resultStatus" :disabled="!canEdit" @change="(value:string|number|boolean|undefined)=>setBoolean(item,value as 'NORMAL'|'ABNORMAL')"><el-radio-button value="NORMAL">正常</el-radio-button><el-radio-button value="ABNORMAL">异常</el-radio-button></el-radio-group>
               <el-input v-else v-model="drafts[item.id].actualValue" type="textarea" :rows="2" :disabled="!canEdit" placeholder="填写现场观察结果" @input="markDirty(item.id)" />
             </el-form-item>
+            <el-alert v-if="item.itemType === 'NUMBER' && numberHint(item)" :title="numberHint(item)?.text" :type="numberHint(item)?.abnormal ? 'error' : 'success'" :closable="false" show-icon />
             <el-form-item v-if="item.itemType!=='BOOLEAN'" label="结果判定" required><el-radio-group v-model="drafts[item.id].resultStatus" :disabled="!canEdit" @change="markDirty(item.id)"><el-radio value="NORMAL">正常</el-radio><el-radio value="ABNORMAL">异常</el-radio></el-radio-group></el-form-item>
             <el-form-item label="检查备注"><el-input v-model="drafts[item.id].remark" :disabled="!canEdit" placeholder="选填" @input="markDirty(item.id)" /></el-form-item>
             <el-form-item v-if="canEdit"><el-button type="primary" :loading="savingIds.has(item.id)" :disabled="!dirtyIds.has(item.id)" @click="saveItem(item)">保存本项</el-button></el-form-item>
@@ -214,10 +249,10 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload));
       </el-card>
     </template>
 
-    <el-dialog v-model="abnormalVisible" title="上报巡检异常" width="620px" :close-on-click-modal="!abnormalSaving"><el-form label-width="95px" class="abnormal-form">
+    <el-dialog v-model="abnormalVisible" title="上报巡检异常" width="620px" :close-on-click-modal="!abnormalSaving" :before-close="beforeCloseAbnormal"><el-form label-width="95px" class="abnormal-form">
       <el-form-item label="异常标题" required><el-input v-model="abnormalForm.title" maxlength="128" :disabled="abnormalSaving" /></el-form-item><el-form-item label="严重程度" required><el-select v-model="abnormalForm.severity" :disabled="abnormalSaving"><el-option v-for="severity in SEVERITIES" :key="severity" :label="displayValue(severity)" :value="severity" /></el-select></el-form-item>
       <el-form-item label="关联检查项"><el-select v-model="abnormalForm.taskItemId" clearable :disabled="abnormalSaving" placeholder="可选"><el-option v-for="item in items" :key="item.id" :label="`${item.itemName}（${item.itemCode}）`" :value="item.id" /></el-select></el-form-item><el-form-item label="异常描述" required><el-input v-model="abnormalForm.description" type="textarea" :rows="5" maxlength="2000" show-word-limit :disabled="abnormalSaving" /></el-form-item>
-    </el-form><template #footer><el-button :disabled="abnormalSaving" @click="abnormalVisible=false">取消</el-button><el-button type="danger" :loading="abnormalSaving" @click="createAbnormal">确认上报</el-button></template></el-dialog>
+    </el-form><template #footer><el-button :disabled="abnormalSaving" @click="beforeCloseAbnormal(()=>{ abnormalVisible = false; })">取消</el-button><el-button type="danger" :loading="abnormalSaving" @click="createAbnormal">确认上报</el-button></template></el-dialog>
   </section>
 </template>
 

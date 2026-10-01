@@ -22,8 +22,13 @@ let camera: THREE.PerspectiveCamera | null = null;
 let renderer: THREE.WebGLRenderer | null = null;
 let controls: OrbitControls | null = null;
 let animId: number | null = null;
+let pointerDownHandler: ((event: PointerEvent) => void) | null = null;
+let pointerEventTarget: HTMLCanvasElement | null = null;
+let resizeListenerActive = false;
 const meshMap = new Map<string, THREE.Group>();
 let highlightedGroup: THREE.Group | null = null;
+const sceneOrigin = new THREE.Vector3();
+let uniformSceneScale = 1;
 
 const devicesWithCoords = computed(() => {
   return devices.value.filter(
@@ -160,17 +165,91 @@ function buildDeviceMesh(dev: Device): THREE.Group {
   sprite.scale.set(4, 1.25, 1);
   group.add(sprite);
 
-  // Real world coordinates placement
-  const posX = (Number(dev.positionX) || 0) - 23;
-  const posY = Math.max(0, Number(dev.positionY) || 0);
-  const posZ = (Number(dev.positionZ) || 0) * 3;
+  // Preserve the DB coordinate semantics: one origin translation and one
+  // uniform scale are applied to all three axes for scene visualization.
+  const posX = (Number(dev.positionX) - sceneOrigin.x) * uniformSceneScale;
+  const posY = (Number(dev.positionY) - sceneOrigin.y) * uniformSceneScale;
+  const posZ = (Number(dev.positionZ) - sceneOrigin.z) * uniformSceneScale;
   group.position.set(posX, posY, posZ);
 
   return group;
 }
 
+function prepareSceneTransform() {
+  if (!devicesWithCoords.value.length) {
+    sceneOrigin.set(0, 0, 0);
+    uniformSceneScale = 1;
+    return;
+  }
+
+  const xs = devicesWithCoords.value.map((d) => Number(d.positionX));
+  const ys = devicesWithCoords.value.map((d) => Number(d.positionY));
+  const zs = devicesWithCoords.value.map((d) => Number(d.positionZ));
+  const minX = Math.min(...xs);
+  const maxX = Math.max(...xs);
+  const minY = Math.min(...ys);
+  const maxY = Math.max(...ys);
+  const minZ = Math.min(...zs);
+  const maxZ = Math.max(...zs);
+  sceneOrigin.set((minX + maxX) / 2, minY, (minZ + maxZ) / 2);
+  const maxSpan = Math.max(maxX - minX, maxY - minY, maxZ - minZ, 1);
+  uniformSceneScale = Math.min(3, 50 / maxSpan);
+}
+
+function disposeMaterial(material: THREE.Material) {
+  const texture = (material as THREE.Material & { map?: THREE.Texture | null }).map;
+  texture?.dispose();
+  material.dispose();
+}
+
+function disposeScene() {
+  if (animId !== null) {
+    cancelAnimationFrame(animId);
+    animId = null;
+  }
+  if (resizeListenerActive) {
+    window.removeEventListener('resize', handleResize);
+    resizeListenerActive = false;
+  }
+  if (pointerEventTarget && pointerDownHandler) {
+    pointerEventTarget.removeEventListener('pointerdown', pointerDownHandler);
+  }
+  pointerEventTarget = null;
+  pointerDownHandler = null;
+  controls?.dispose();
+  controls = null;
+
+  scene?.traverse((child) => {
+    const disposable = child as THREE.Object3D & {
+      geometry?: THREE.BufferGeometry;
+      material?: THREE.Material | THREE.Material[];
+    };
+    disposable.geometry?.dispose();
+    if (Array.isArray(disposable.material)) {
+      disposable.material.forEach(disposeMaterial);
+    } else if (disposable.material) {
+      disposeMaterial(disposable.material);
+    }
+  });
+  scene?.clear();
+  scene = null;
+
+  if (renderer) {
+    const canvas = renderer.domElement;
+    renderer.dispose();
+    canvas.parentNode?.removeChild(canvas);
+  }
+  renderer = null;
+  camera = null;
+  meshMap.clear();
+  highlightedGroup = null;
+}
+
 function initScene() {
   if (!canvasContainer.value) return;
+
+  disposeScene();
+  prepareSceneTransform();
 
   const width = canvasContainer.value.clientWidth;
   const height = canvasContainer.value.clientHeight || 580;
@@ -242,6 +321,8 @@ function initScene() {
 
   // Setup Raycaster
   setupRaycaster();
+  window.addEventListener('resize', handleResize);
+  resizeListenerActive = true;
 
   // Animation Loop
   const animate = () => {
@@ -262,7 +343,8 @@ function setupRaycaster() {
 
   const dom = renderer.domElement;
 
-  const onPointerDown = (event: MouseEvent) => {
+  pointerEventTarget = dom;
+  pointerDownHandler = (event: PointerEvent) => {
     if (!camera || !scene) return;
     const rect = dom.getBoundingClientRect();
     mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
@@ -289,7 +371,7 @@ function setupRaycaster() {
     }
   };
 
-  dom.addEventListener('pointerdown', onPointerDown);
+  dom.addEventListener('pointerdown', pointerDownHandler);
 }
 
 function highlightMesh(group: THREE.Group | null) {
@@ -337,13 +419,26 @@ async function loadData() {
   loading.value = true;
   errorMessage.value = '';
   try {
-    const data = await request.get<never, PageResult<Device>>('/api/device/devices', {
+    const firstPage = await request.get<never, PageResult<Device>>('/api/device/devices', {
       params: {
         pageNum: 1,
         pageSize: 100
       }
     });
-    devices.value = data.records ?? [];
+    const pageCount = Math.ceil((firstPage.total ?? 0) / 100);
+    const remainingPages = pageCount > 1
+      ? await Promise.all(
+          Array.from({ length: pageCount - 1 }, (_, index) =>
+            request.get<never, PageResult<Device>>('/api/device/devices', {
+              params: { pageNum: index + 2, pageSize: 100 }
+            })
+          )
+        )
+      : [];
+    devices.value = [
+      ...(firstPage.records ?? []),
+      ...remainingPages.flatMap((page) => page.records ?? [])
+    ];
     await nextTick();
     initScene();
     if (devicesWithCoords.value.length > 0) {
@@ -358,50 +453,10 @@ async function loadData() {
 
 onMounted(() => {
   void loadData();
-  window.addEventListener('resize', handleResize);
 });
 
 onUnmounted(() => {
-  window.removeEventListener('resize', handleResize);
-
-  if (animId !== null) {
-    cancelAnimationFrame(animId);
-    animId = null;
-  }
-
-  if (controls) {
-    controls.dispose();
-    controls = null;
-  }
-
-  if (scene) {
-    scene.traverse((child) => {
-      if (child instanceof THREE.Mesh) {
-        if (child.geometry) child.geometry.dispose();
-        if (Array.isArray(child.material)) {
-          child.material.forEach((m) => m.dispose());
-        } else if (child.material) {
-          child.material.dispose();
-        }
-      } else if (child instanceof THREE.Sprite) {
-        if (child.material.map) child.material.map.dispose();
-        child.material.dispose();
-      }
-    });
-    scene.clear();
-    scene = null;
-  }
-
-  if (renderer) {
-    renderer.dispose();
-    if (renderer.domElement.parentNode) {
-      renderer.domElement.parentNode.removeChild(renderer.domElement);
-    }
-    renderer = null;
-  }
-
-  meshMap.clear();
-  highlightedGroup = null;
+  disposeScene();
 });
 </script>
 

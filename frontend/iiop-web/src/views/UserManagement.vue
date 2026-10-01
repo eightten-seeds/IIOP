@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
+import { onBeforeRouteLeave } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { request } from '../api/request';
 import { useAuthStore } from '../stores/auth';
@@ -66,6 +67,7 @@ const deletingId = ref('');
 const roleLoading = ref(false);
 const roleUser = ref<UserSummary | null>(null);
 const selectedRoleIds = ref<string[]>([]);
+const initialRoleIds = ref<string[]>([]);
 const createForm = reactive<UserCreateForm>({ username: '', password: '', realName: '', phone: '', email: '', avatarUrl: '', status: 'ENABLED' });
 const editForm = reactive<UserEditForm>({ realName: '', phone: '', email: '', avatarUrl: '' });
 const editTouched = reactive<Record<keyof UserEditForm, boolean>>({ realName: false, phone: false, email: false, avatarUrl: false });
@@ -119,6 +121,7 @@ function openCreate() {
 }
 
 async function createUser() {
+  if (saving.value) return;
   if (!createForm.username.trim()) return void ElMessage.warning('请输入用户名');
   if (createForm.password.length < 8 || createForm.password.length > 72) return void ElMessage.warning('密码长度必须为 8~72 位');
   saving.value = true;
@@ -151,7 +154,7 @@ async function openEdit(row: UserSummary) {
 }
 
 async function updateUser() {
-  if (!editUser.value) return;
+  if (saving.value || !editUser.value) return;
   const payload: Partial<UserEditForm> = {};
   (Object.keys(editTouched) as Array<keyof UserEditForm>).forEach((field) => {
     if (editTouched[field]) payload[field] = editForm[field];
@@ -177,6 +180,7 @@ async function targetRoles(userId: string) {
 }
 
 async function updateStatus(row: UserSummary, status: UserSummary['status']) {
+  if (statusSavingId.value) return;
   statusSavingId.value = row.id;
   try {
     const assigned = await targetRoles(row.id);
@@ -210,6 +214,7 @@ async function openRoles(row: UserSummary) {
     ]);
     roles.value = allRoles;
     selectedRoleIds.value = assignedRoles.map((role) => role.id);
+    initialRoleIds.value = [...selectedRoleIds.value];
     roleVisible.value = true;
   } finally {
     roleLoading.value = false;
@@ -228,7 +233,7 @@ function roleHelp(role: RoleView) {
 }
 
 async function saveRoles() {
-  if (!roleUser.value) return;
+  if (saving.value || !roleUser.value) return;
   try {
     await ElMessageBox.confirm('确认提交完整岗位集合吗？', '确认角色变更', { type: 'warning', confirmButtonText: '确认', cancelButtonText: '取消' });
   } catch {
@@ -238,6 +243,7 @@ async function saveRoles() {
   try {
     await request.put(`/api/auth/users/${roleUser.value.id}/roles`, { ids: selectedRoleIds.value });
     ElMessage.success('角色分配成功');
+    initialRoleIds.value = [...selectedRoleIds.value];
     roleVisible.value = false;
     await load();
   } finally {
@@ -246,6 +252,7 @@ async function saveRoles() {
 }
 
 async function deleteUser(row: UserSummary) {
+  if (deletingId.value) return;
   try {
     await ElMessageBox.confirm(`确认删除用户“${row.username}”吗？此操作不可撤销。`, '删除用户', { type: 'error', confirmButtonText: '删除', cancelButtonText: '取消' });
   } catch {
@@ -288,7 +295,7 @@ async function openResetPassword(row: UserSummary) {
 }
 
 async function submitResetPassword() {
-  if (!resetUser.value) return;
+  if (resetSaving.value || !resetUser.value) return;
   if (!resetForm.newPassword || resetForm.newPassword.length < 8 || resetForm.newPassword.length > 72) {
     ElMessage.warning('密码长度必须为 8~72 位');
     return;
@@ -309,12 +316,139 @@ async function submitResetPassword() {
   }
 }
 
+function isCreateDirty() {
+  return Boolean(
+    createForm.username.trim() ||
+    createForm.password ||
+    createForm.realName.trim() ||
+    createForm.phone.trim() ||
+    createForm.email.trim() ||
+    createForm.avatarUrl.trim() ||
+    createForm.status !== 'ENABLED'
+  );
+}
+
+function isEditDirty() {
+  return Object.values(editTouched).some(Boolean);
+}
+
+function isRoleDirty() {
+  if (selectedRoleIds.value.length !== initialRoleIds.value.length) return true;
+  const set = new Set(initialRoleIds.value);
+  return selectedRoleIds.value.some((id) => !set.has(id));
+}
+
+function isResetDirty() {
+  return Boolean(resetForm.newPassword || resetForm.confirmPassword);
+}
+
+const isAnyDirty = computed(() =>
+  (createVisible.value && isCreateDirty()) ||
+  (editVisible.value && isEditDirty()) ||
+  (roleVisible.value && isRoleDirty()) ||
+  (resetVisible.value && isResetDirty())
+);
+
+async function beforeCloseCreate(done?: () => void) {
+  if (saving.value) return;
+  if (isCreateDirty()) {
+    try {
+      await ElMessageBox.confirm('当前有未保存的用户信息，确定放弃吗？', '提示', {
+        type: 'warning',
+        confirmButtonText: '放弃修改',
+        cancelButtonText: '继续编辑'
+      });
+    } catch {
+      return;
+    }
+  }
+  if (done) done();
+  else createVisible.value = false;
+}
+
+async function beforeCloseEdit(done?: () => void) {
+  if (saving.value) return;
+  if (isEditDirty()) {
+    try {
+      await ElMessageBox.confirm('当前有未保存的编辑内容，确定放弃吗？', '提示', {
+        type: 'warning',
+        confirmButtonText: '放弃修改',
+        cancelButtonText: '继续编辑'
+      });
+    } catch {
+      return;
+    }
+  }
+  if (done) done();
+  else editVisible.value = false;
+}
+
+async function beforeCloseRole(done?: () => void) {
+  if (saving.value) return;
+  if (isRoleDirty()) {
+    try {
+      await ElMessageBox.confirm('岗位选择尚未保存，确定放弃吗？', '提示', {
+        type: 'warning',
+        confirmButtonText: '放弃修改',
+        cancelButtonText: '继续编辑'
+      });
+    } catch {
+      return;
+    }
+  }
+  if (done) done();
+  else roleVisible.value = false;
+}
+
+async function beforeCloseReset(done?: () => void) {
+  if (resetSaving.value) return;
+  if (isResetDirty()) {
+    try {
+      await ElMessageBox.confirm('当前有未提交的新密码，确定放弃吗？', '提示', {
+        type: 'warning',
+        confirmButtonText: '放弃修改',
+        cancelButtonText: '继续编辑'
+      });
+    } catch {
+      return;
+    }
+  }
+  if (done) done();
+  else resetVisible.value = false;
+}
+
+function beforeUnload(e: BeforeUnloadEvent) {
+  if (isAnyDirty.value) {
+    e.preventDefault();
+    e.returnValue = '';
+  }
+}
+
+onBeforeRouteLeave(async () => {
+  if (!isAnyDirty.value) return true;
+  try {
+    await ElMessageBox.confirm('当前有未保存的用户操作，确定离开吗？', '提示', {
+      type: 'warning',
+      confirmButtonText: '放弃修改',
+      cancelButtonText: '继续留在页面'
+    });
+    return true;
+  } catch {
+    return false;
+  }
+});
+
 onMounted(async () => {
+  window.addEventListener('beforeunload', beforeUnload);
   try {
     await Promise.all([load(), loadRoles()]);
   } catch {
     // 用户列表自身负责 error/retry；角色筛选失败由公共错误提示说明。
   }
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener('beforeunload', beforeUnload);
 });
 </script>
 
@@ -375,7 +509,7 @@ onMounted(async () => {
       <el-pagination v-if="!errorMessage&&total>pageSize" v-model:current-page="page" layout="prev, pager, next, total" :page-size="pageSize" :total="total" @current-change="load" />
     </el-card>
 
-    <el-dialog v-model="createVisible" title="创建用户" width="600px" :close-on-click-modal="!saving">
+    <el-dialog v-model="createVisible" title="创建用户" width="600px" :close-on-click-modal="!saving" :before-close="beforeCloseCreate">
       <el-form label-width="100px">
         <el-form-item label="用户名" required><el-input v-model="createForm.username" autocomplete="off" /></el-form-item>
         <el-form-item label="密码" required><el-input v-model="createForm.password" type="password" show-password autocomplete="new-password" maxlength="72" placeholder="8~72 位" /></el-form-item>
@@ -385,10 +519,10 @@ onMounted(async () => {
         <el-form-item label="头像地址"><el-input v-model="createForm.avatarUrl" /></el-form-item>
         <el-form-item label="状态"><el-select v-model="createForm.status"><el-option label="启用" value="ENABLED" /><el-option label="停用" value="DISABLED" /><el-option label="锁定" value="LOCKED" /></el-select></el-form-item>
       </el-form>
-      <template #footer><el-button :disabled="saving" @click="createVisible=false">取消</el-button><el-button type="primary" :loading="saving" @click="createUser">保存</el-button></template>
+      <template #footer><el-button :disabled="saving" @click="beforeCloseCreate()">取消</el-button><el-button type="primary" :loading="saving" :disabled="saving" @click="createUser">保存</el-button></template>
     </el-dialog>
 
-    <el-dialog v-model="editVisible" :title="`编辑用户：${editUser?.username||''}`" width="600px" :close-on-click-modal="!saving">
+    <el-dialog v-model="editVisible" :title="`编辑用户：${editUser?.username||''}`" width="600px" :close-on-click-modal="!saving" :before-close="beforeCloseEdit">
       <el-alert title="后端当前不返回手机号、邮箱和头像；仅实际修改的字段会提交，未修改的空白字段保持原值。" type="info" :closable="false" show-icon />
       <el-form label-width="100px" class="dialog-form">
         <el-form-item label="姓名"><el-input v-model="editForm.realName" @input="markEditTouched('realName')" /></el-form-item>
@@ -396,10 +530,10 @@ onMounted(async () => {
         <el-form-item label="邮箱"><el-input v-model="editForm.email" placeholder="留空且不修改则保持原值" @input="markEditTouched('email')" /></el-form-item>
         <el-form-item label="头像地址"><el-input v-model="editForm.avatarUrl" placeholder="留空且不修改则保持原值" @input="markEditTouched('avatarUrl')" /></el-form-item>
       </el-form>
-      <template #footer><el-button :disabled="saving" @click="editVisible=false">取消</el-button><el-button type="primary" :loading="saving" @click="updateUser">保存</el-button></template>
+      <template #footer><el-button :disabled="saving" @click="beforeCloseEdit()">取消</el-button><el-button type="primary" :loading="saving" :disabled="saving" @click="updateUser">保存</el-button></template>
     </el-dialog>
 
-    <el-dialog v-model="roleVisible" title="分配固定岗位" width="520px" :close-on-click-modal="!saving">
+    <el-dialog v-model="roleVisible" title="分配固定岗位" width="520px" :close-on-click-modal="!saving" :before-close="beforeCloseRole">
       <p>用户：{{ roleUser?.username }}</p>
       <el-checkbox-group v-model="selectedRoleIds" class="role-options">
         <el-tooltip v-for="role in roles" :key="role.id" :content="roleHelp(role)" :disabled="!roleHelp(role)" placement="right">
@@ -407,10 +541,10 @@ onMounted(async () => {
         </el-tooltip>
       </el-checkbox-group>
       <el-alert title="保存时提交当前完整岗位集合；已有岗位已从服务端加载并回显。" type="info" :closable="false" show-icon />
-      <template #footer><el-button :disabled="saving" @click="roleVisible=false">取消</el-button><el-button type="primary" :loading="saving" @click="saveRoles">保存角色</el-button></template>
+      <template #footer><el-button :disabled="saving" @click="beforeCloseRole()">取消</el-button><el-button type="primary" :loading="saving" :disabled="saving" @click="saveRoles">保存角色</el-button></template>
     </el-dialog>
 
-    <el-dialog v-model="resetVisible" title="重置用户密码" width="440px" :close-on-click-modal="!resetSaving">
+    <el-dialog v-model="resetVisible" title="重置用户密码" width="440px" :close-on-click-modal="!resetSaving" :before-close="beforeCloseReset">
       <el-alert
         title="重置密码后，目标用户的当前所有在线会话将被立即强制下线。"
         type="warning"
@@ -430,8 +564,8 @@ onMounted(async () => {
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button :disabled="resetSaving" @click="resetVisible=false">取消</el-button>
-        <el-button type="primary" :loading="resetSaving" @click="submitResetPassword">确认重置</el-button>
+        <el-button :disabled="resetSaving" @click="beforeCloseReset()">取消</el-button>
+        <el-button type="primary" :loading="resetSaving" :disabled="resetSaving" @click="submitResetPassword">确认重置</el-button>
       </template>
     </el-dialog>
   </section>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { onBeforeRouteLeave } from 'vue-router';
 import { request } from '../api/request';
@@ -25,6 +25,7 @@ async function beforeClose(done:()=>void) {
 }
 
 async function save() {
+  if (saving.value) return;
   if (!form.title.trim()) return void ElMessage.warning('请填写工单标题');
   if (!form.description.trim()) return void ElMessage.warning('请填写工单描述');
   if (form.plannedStartTime && form.plannedEndTime && form.plannedEndTime <= form.plannedStartTime) return void ElMessage.warning('计划结束时间应晚于开始时间');
@@ -35,6 +36,22 @@ async function save() {
     emit('update:visible', false); emit('created', created); ElMessage.success('维修工单已创建');
   } finally { saving.value = false; }
 }
+
+function beforeUnload(e: BeforeUnloadEvent) {
+  if (dirty.value) {
+    e.preventDefault();
+    e.returnValue = '';
+  }
+}
+
+onMounted(() => {
+  window.addEventListener('beforeunload', beforeUnload);
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener('beforeunload', beforeUnload);
+});
+
 onBeforeRouteLeave(async () => {
   if (!dirty.value) return true;
   try { await ElMessageBox.confirm('工单内容尚未保存，确定离开吗？', '离开页面', { type:'warning' }); return true; }
@@ -52,7 +69,7 @@ onBeforeRouteLeave(async () => {
       <el-row :gutter="16"><el-col :span="12"><el-form-item label="工单类型" required><el-select v-model="form.workOrderType"><el-option v-for="x in ['REPAIR','PREVENTIVE','EMERGENCY']" :key="x" :label="displayValue(x)" :value="x" /></el-select></el-form-item></el-col><el-col :span="12"><el-form-item label="优先级" required><el-select v-model="form.priority"><el-option v-for="x in ['LOW','MEDIUM','HIGH','URGENT']" :key="x" :label="displayValue(x)" :value="x" /></el-select></el-form-item></el-col></el-row>
       <el-row :gutter="16"><el-col :span="12"><el-form-item label="计划开始"><el-date-picker v-model="form.plannedStartTime" type="datetime" value-format="YYYY-MM-DDTHH:mm:ss" /></el-form-item></el-col><el-col :span="12"><el-form-item label="计划结束"><el-date-picker v-model="form.plannedEndTime" type="datetime" value-format="YYYY-MM-DDTHH:mm:ss" /></el-form-item></el-col></el-row>
     </el-form>
-    <template #footer><el-button :disabled="saving" @click="beforeClose(()=>emit('update:visible',false))">取消</el-button><el-button type="primary" :loading="saving" @click="save">创建工单</el-button></template>
+    <template #footer><el-button :disabled="saving" @click="beforeClose(()=>emit('update:visible',false))">取消</el-button><el-button type="primary" :loading="saving" :disabled="saving" @click="save">创建工单</el-button></template>
   </el-dialog>
 </template>
 

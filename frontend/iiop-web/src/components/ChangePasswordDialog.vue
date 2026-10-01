@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { reactive, ref, watch } from 'vue';
-import { ElMessage, type FormInstance, type FormRules } from 'element-plus';
+import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus';
 import { useRouter } from 'vue-router';
 import { request } from '../api/request';
 import { useAuthStore } from '../stores/auth';
@@ -57,16 +57,29 @@ const rules: FormRules = {
   ]
 };
 
-function handleClose() {
+async function handleClose(done?: () => void) {
+  if (submitting.value) return;
+  if (form.oldPassword || form.newPassword || form.confirmPassword) {
+    try {
+      await ElMessageBox.confirm('当前输入的内容尚未提交，确定放弃修改吗？', '提示', {
+        type: 'warning',
+        confirmButtonText: '放弃修改',
+        cancelButtonText: '继续编辑'
+      });
+    } catch {
+      return;
+    }
+  }
   emit('update:visible', false);
   form.oldPassword = '';
   form.newPassword = '';
   form.confirmPassword = '';
   formRef.value?.resetFields();
+  if (done) done();
 }
 
 async function submit() {
-  if (!formRef.value) return;
+  if (submitting.value || !formRef.value) return;
   await formRef.value.validate();
   submitting.value = true;
   try {
@@ -75,7 +88,11 @@ async function submit() {
       newPassword: form.newPassword
     });
     ElMessage.success('密码修改成功，请使用新密码重新登录');
-    handleClose();
+    emit('update:visible', false);
+    form.oldPassword = '';
+    form.newPassword = '';
+    form.confirmPassword = '';
+    formRef.value?.resetFields();
     auth.logoutLocal();
     await router.replace('/login');
   } finally {
@@ -102,7 +119,7 @@ watch(
     width="440px"
     destroy-on-close
     :close-on-click-modal="false"
-    @close="handleClose"
+    :before-close="handleClose"
   >
     <el-alert
       title="修改密码成功后将退出当前登录状态，需使用新密码重新登录。"
@@ -147,8 +164,8 @@ watch(
       </el-form-item>
     </el-form>
     <template #footer>
-      <el-button @click="handleClose">取消</el-button>
-      <el-button type="primary" :loading="submitting" @click="submit">确认修改</el-button>
+      <el-button :disabled="submitting" @click="handleClose()">取消</el-button>
+      <el-button type="primary" :loading="submitting" :disabled="submitting" @click="submit">确认修改</el-button>
     </template>
   </el-dialog>
 </template>

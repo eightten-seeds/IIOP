@@ -30,7 +30,9 @@ export const useAuthStore = defineStore('auth', {
     identityLoaded: false,
     unread: 0
   }),
-  persist: true,
+  // Only a credential can survive a reload. Identity is always revalidated by
+  // /api/auth/me before protected routes render, preventing stale role views.
+  persist: { pick: ['token'] },
   actions: {
     applyIdentity(data: IdentityResponse) {
       this.currentUser = data?.user ?? null;
@@ -56,7 +58,7 @@ export const useAuthStore = defineStore('auth', {
       this.applyIdentity(data);
     },
     async ensureIdentity() {
-      if (this.token && !this.identityLoaded) await this.me();
+      if (this.token) await this.me();
     },
     async refreshUnread() {
       if (!this.token || !this.roles.length) return;

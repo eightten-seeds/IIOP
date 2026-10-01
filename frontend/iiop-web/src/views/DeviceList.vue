@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue';
-import { useRouter } from 'vue-router';
+import { computed, onBeforeUnmount, onMounted, onUnmounted, reactive, ref } from 'vue';
+import { onBeforeRouteLeave, useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { request } from '../api/request';
 import { useAuthStore } from '../stores/auth';
@@ -29,6 +29,8 @@ const editingId = ref('');
 const formLoading = ref(false);
 const saving = ref(false);
 const form = reactive<DeviceForm>(emptyDeviceForm());
+const initialSnapshot = ref('');
+const formDirty = computed(() => formVisible.value && JSON.stringify(form) !== initialSnapshot.value);
 const spatialSections = ref<string[]>([]);
 const userOptions = ref<UserSummary[]>([]);
 const userLoading = ref(false);
@@ -137,6 +139,7 @@ async function openCreate() {
   Object.assign(form, emptyDeviceForm());
   spatialSections.value = [];
   await Promise.all([ensureCategories(), searchUsers('')]);
+  initialSnapshot.value = JSON.stringify(form);
   formVisible.value = true;
 }
 
@@ -152,13 +155,24 @@ async function openEdit(row: Device) {
     Object.assign(form, emptyDeviceForm(), editableDeviceForm(device));
     await ensureResponsibleOption(device.responsibleUserId);
     spatialSections.value = device.modelUrl || device.positionX != null || device.positionY != null || device.positionZ != null ? ['spatial'] : [];
+    initialSnapshot.value = JSON.stringify(form);
     formVisible.value = true;
   } finally {
     formLoading.value = false;
   }
 }
 
+async function beforeCloseDevice(done: () => void) {
+  if (saving.value) return;
+  if (!formDirty.value) return done();
+  try {
+    await ElMessageBox.confirm('设备档案尚未保存，确定放弃吗？', '放弃编辑', { type: 'warning' });
+    done();
+  } catch { /* 保留表单 */ }
+}
+
 async function saveDevice() {
+  if (saving.value) return;
   if (!form.deviceCode.trim() || !form.deviceName.trim()) return void ElMessage.warning('请填写设备编码和设备名称');
   if (!form.categoryId) return void ElMessage.warning('请选择设备分类');
   saving.value = true;
@@ -167,6 +181,7 @@ async function saveDevice() {
     if (editingId.value) await request.put(`/api/device/devices/${editingId.value}`, payload);
     else await request.post('/api/device/devices', payload);
     ElMessage.success(editingId.value ? '设备档案更新成功' : '设备创建成功');
+    initialSnapshot.value = JSON.stringify(form);
     formVisible.value = false;
     await load();
   } finally {
@@ -175,6 +190,7 @@ async function saveDevice() {
 }
 
 async function deleteDevice(row: Device) {
+  if (deletingId.value) return;
   try {
     await ElMessageBox.confirm(`确认删除设备“${row.deviceName}（${row.deviceCode}）”吗？不会自动级联删除关联业务数据。`, '删除设备', { type: 'error', confirmButtonText: '删除', cancelButtonText: '取消' });
   } catch { return; }
@@ -189,7 +205,34 @@ async function deleteDevice(row: Device) {
   }
 }
 
-onMounted(load);
+function beforeUnload(event: BeforeUnloadEvent) {
+  if (!formDirty.value) return;
+  event.preventDefault();
+  event.returnValue = '';
+}
+
+onBeforeRouteLeave(async () => {
+  if (!formDirty.value) return true;
+  try {
+    await ElMessageBox.confirm('设备档案尚未保存，确定离开当前页面吗？', '未保存修改', {
+      type: 'warning',
+      confirmButtonText: '离开',
+      cancelButtonText: '继续编辑'
+    });
+    return true;
+  } catch {
+    return false;
+  }
+});
+
+onMounted(() => {
+  window.addEventListener('beforeunload', beforeUnload);
+  void load();
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener('beforeunload', beforeUnload);
+});
 </script>
 
 <template>
@@ -233,7 +276,7 @@ onMounted(load);
       <el-pagination v-if="!errorMessage&&total>pageSize" v-model:current-page="page" layout="prev, pager, next, total" :page-size="pageSize" :total="total" @current-change="load" />
     </el-card>
 
-    <el-dialog v-model="formVisible" :title="formTitle" width="920px" :close-on-click-modal="!saving">
+    <el-dialog v-model="formVisible" :title="formTitle" width="920px" :close-on-click-modal="!saving" :before-close="beforeCloseDevice">
       <el-form label-width="110px" class="device-form">
         <el-row :gutter="18">
           <el-col :span="12"><el-form-item label="设备编码" required><el-input v-model="form.deviceCode" :disabled="saving" /></el-form-item></el-col>
@@ -259,7 +302,7 @@ onMounted(load);
           <el-col :span="8"><el-form-item label="Z 坐标"><el-input-number v-model="form.positionZ" :precision="3" controls-position="right" :disabled="saving" /></el-form-item></el-col>
         </el-row></el-collapse-item></el-collapse>
       </el-form>
-      <template #footer><el-button :disabled="saving" @click="formVisible=false">取消</el-button><el-button type="primary" :loading="saving" @click="saveDevice">保存设备</el-button></template>
+      <template #footer><el-button :disabled="saving" @click="beforeCloseDevice(() => { formVisible = false; })">取消</el-button><el-button type="primary" :loading="saving" @click="saveDevice">保存设备</el-button></template>
     </el-dialog>
   </section>
 </template>

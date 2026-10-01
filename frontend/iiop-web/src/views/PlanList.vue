@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
+import { onBeforeRouteLeave } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { request } from '../api/request';
 import { useAuthStore } from '../stores/auth';
@@ -33,6 +34,8 @@ const saving = ref(false);
 const editingId = ref('');
 const templateBlocked = ref(false);
 const form = reactive<PlanForm>(emptyPlanForm());
+const initialSnapshot = ref('');
+const formDirty = computed(() => formVisible.value && JSON.stringify(form) !== initialSnapshot.value);
 
 const deviceLabel = (device: Device) => `${device.deviceName}（${device.deviceCode}）`;
 const templateLabel = (template: InspectionTemplate) => `${template.templateName}（${template.templateCode} / v${template.version}）`;
@@ -148,6 +151,7 @@ async function openCreate() {
   templateBlocked.value = false;
   Object.assign(form, emptyPlanForm());
   await Promise.all([searchDevices(''), searchTemplates(''), searchInspectors('')]);
+  initialSnapshot.value = JSON.stringify(form);
   formVisible.value = true;
 }
 
@@ -166,13 +170,24 @@ async function openEdit(row: InspectionPlan) {
       endDate: detail.endDate, assigneeUserId: detail.assigneeUserId, status: detail.status
     });
     await checkTemplate(detail.templateId);
+    initialSnapshot.value = JSON.stringify(form);
     formVisible.value = true;
   } finally { formLoading.value = false; }
+}
+
+async function beforeClosePlan(done: () => void) {
+  if (saving.value) return;
+  if (!formDirty.value) return done();
+  try {
+    await ElMessageBox.confirm('巡检计划尚未保存，确定放弃吗？', '放弃编辑', { type: 'warning' });
+    done();
+  } catch { /* 保留表单 */ }
 }
 
 watch(() => form.scheduleType, value => { if (value !== 'CRON') form.cronExpression = ''; });
 
 async function savePlan() {
+  if (saving.value) return;
   if (!form.planCode.trim() || !form.planName.trim()) return void ElMessage.warning('请填写计划编码和计划名称');
   if (!form.deviceId || !form.templateId || !form.assigneeUserId) return void ElMessage.warning('请选择设备、巡检模板和巡检人员');
   if (form.scheduleType === 'CRON' && !form.cronExpression.trim()) return void ElMessage.warning('CRON 计划必须填写表达式');
@@ -183,12 +198,14 @@ async function savePlan() {
     if (editingId.value) await request.put(`/api/inspection/plans/${editingId.value}`, payload);
     else await request.post('/api/inspection/plans', payload);
     ElMessage.success(editingId.value ? '巡检计划更新成功' : '巡检计划创建成功');
+    initialSnapshot.value = JSON.stringify(form);
     formVisible.value = false;
     await load();
   } finally { saving.value = false; }
 }
 
 async function generateTask(row: InspectionPlan) {
+  if (generatingId.value) return;
   try {
     await ElMessageBox.confirm('确认根据当前巡检计划生成新的待执行任务？', '生成巡检任务', { type: 'warning', confirmButtonText: '确认生成', cancelButtonText: '取消' });
   } catch { return; }
@@ -199,6 +216,35 @@ async function generateTask(row: InspectionPlan) {
     await load();
   } finally { generatingId.value = ''; }
 }
+
+function beforeUnload(event: BeforeUnloadEvent) {
+  if (!formDirty.value) return;
+  event.preventDefault();
+  event.returnValue = '';
+}
+
+onBeforeRouteLeave(async () => {
+  if (!formDirty.value) return true;
+  try {
+    await ElMessageBox.confirm('巡检计划尚未保存，确定离开当前页面吗？', '未保存修改', {
+      type: 'warning',
+      confirmButtonText: '离开',
+      cancelButtonText: '继续编辑'
+    });
+    return true;
+  } catch {
+    return false;
+  }
+});
+
+onMounted(() => {
+  window.addEventListener('beforeunload', beforeUnload);
+  void load();
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener('beforeunload', beforeUnload);
+});
 </script>
 
 <template>
@@ -236,7 +282,7 @@ async function generateTask(row: InspectionPlan) {
       <el-pagination v-if="!errorMessage&&total>pageSize" v-model:current-page="page" layout="prev, pager, next, total" :page-size="pageSize" :total="total" @current-change="load" />
     </el-card>
 
-    <el-dialog v-model="formVisible" :title="editingId?'编辑巡检计划':'新增巡检计划'" width="780px" :close-on-click-modal="!saving">
+    <el-dialog v-model="formVisible" :title="editingId?'编辑巡检计划':'新增巡检计划'" width="780px" :close-on-click-modal="!saving" :before-close="beforeClosePlan">
       <el-alert v-if="templateBlocked" title="该模板包含第一版无法执行的必填 PHOTO 检查项，请先调整模板。" type="error" show-icon :closable="false" />
       <el-form label-width="105px" class="plan-form">
         <el-row :gutter="18">
@@ -252,7 +298,7 @@ async function generateTask(row: InspectionPlan) {
           <el-col :span="12"><el-form-item label="计划状态" required><el-select v-model="form.status" :disabled="saving"><el-option v-for="status in STATUSES" :key="status" :label="displayValue(status)" :value="status" /></el-select></el-form-item></el-col>
         </el-row>
       </el-form>
-      <template #footer><el-button :disabled="saving" @click="formVisible=false">取消</el-button><el-button type="primary" :loading="saving" :disabled="templateBlocked" @click="savePlan">保存计划</el-button></template>
+      <template #footer><el-button :disabled="saving" @click="beforeClosePlan(() => { formVisible = false; })">取消</el-button><el-button type="primary" :loading="saving" :disabled="templateBlocked" @click="savePlan">保存计划</el-button></template>
     </el-dialog>
   </section>
 </template>

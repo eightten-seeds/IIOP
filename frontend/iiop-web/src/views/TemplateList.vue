@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue';
-import { ElMessage } from 'element-plus';
-import { useRouter } from 'vue-router';
+import { computed, onBeforeUnmount, onMounted, onUnmounted, reactive, ref } from 'vue';
+import { ElMessage, ElMessageBox } from 'element-plus';
+import { onBeforeRouteLeave, useRouter } from 'vue-router';
 import { request } from '../api/request';
 import { useAuthStore } from '../stores/auth';
 import { categoryNameMap, categoryOptions, type CategoryOption, type CategoryTree, type PageResult } from '../types/device';
@@ -26,6 +26,8 @@ const formLoading = ref(false);
 const saving = ref(false);
 const editingId = ref('');
 const form = reactive<TemplateForm>(emptyTemplateForm());
+const initialSnapshot = ref('');
+const formDirty = computed(() => formVisible.value && JSON.stringify(form) !== initialSnapshot.value);
 const formTitle = computed(() => editingId.value ? '编辑巡检模板' : '新增巡检模板');
 
 function statusTag(status: TemplateStatus) {
@@ -67,6 +69,7 @@ async function openCreate() {
   editingId.value = '';
   Object.assign(form, emptyTemplateForm());
   await ensureCategories();
+  initialSnapshot.value = JSON.stringify(form);
   formVisible.value = true;
 }
 
@@ -82,11 +85,22 @@ async function openEdit(row: InspectionTemplate) {
       templateCode: detail.templateCode, templateName: detail.templateName, categoryId: detail.categoryId,
       version: detail.version, description: detail.description ?? '', status: detail.status
     });
+    initialSnapshot.value = JSON.stringify(form);
     formVisible.value = true;
   } finally { formLoading.value = false; }
 }
 
+async function beforeCloseTemplate(done: () => void) {
+  if (saving.value) return;
+  if (!formDirty.value) return done();
+  try {
+    await ElMessageBox.confirm('巡检模板尚未保存，确定放弃吗？', '放弃编辑', { type: 'warning' });
+    done();
+  } catch { /* 保留表单 */ }
+}
+
 async function saveTemplate() {
+  if (saving.value) return;
   if (!form.templateCode.trim() || !form.templateName.trim()) return void ElMessage.warning('请填写模板编码和模板名称');
   if (!form.categoryId) return void ElMessage.warning('请选择设备分类');
   saving.value = true;
@@ -94,10 +108,40 @@ async function saveTemplate() {
     if (editingId.value) await request.put(`/api/inspection/templates/${editingId.value}`, { ...form });
     else await request.post('/api/inspection/templates', { ...form });
     ElMessage.success(editingId.value ? '巡检模板更新成功' : '巡检模板创建成功');
+    initialSnapshot.value = JSON.stringify(form);
     formVisible.value = false;
     await load();
   } finally { saving.value = false; }
 }
+
+function beforeUnload(event: BeforeUnloadEvent) {
+  if (!formDirty.value) return;
+  event.preventDefault();
+  event.returnValue = '';
+}
+
+onBeforeRouteLeave(async () => {
+  if (!formDirty.value) return true;
+  try {
+    await ElMessageBox.confirm('巡检模板尚未保存，确定离开当前页面吗？', '未保存修改', {
+      type: 'warning',
+      confirmButtonText: '离开',
+      cancelButtonText: '继续编辑'
+    });
+    return true;
+  } catch {
+    return false;
+  }
+});
+
+onMounted(() => {
+  window.addEventListener('beforeunload', beforeUnload);
+  void load();
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener('beforeunload', beforeUnload);
+});
 </script>
 
 <template>
@@ -132,7 +176,7 @@ async function saveTemplate() {
       <el-pagination v-if="!errorMessage&&total>pageSize" v-model:current-page="page" layout="prev, pager, next, total" :page-size="pageSize" :total="total" @current-change="load" />
     </el-card>
 
-    <el-dialog v-model="formVisible" :title="formTitle" width="680px" :close-on-click-modal="!saving">
+    <el-dialog v-model="formVisible" :title="formTitle" width="680px" :close-on-click-modal="!saving" :before-close="beforeCloseTemplate">
       <el-form label-width="105px" class="dialog-form">
         <el-form-item label="模板编码" required><el-input v-model="form.templateCode" :disabled="saving" /></el-form-item>
         <el-form-item label="模板名称" required><el-input v-model="form.templateName" :disabled="saving" /></el-form-item>
@@ -141,7 +185,7 @@ async function saveTemplate() {
         <el-form-item label="模板状态" required><el-select v-model="form.status" :disabled="saving"><el-option v-for="status in STATUSES" :key="status" :label="displayValue(status)" :value="status" /></el-select></el-form-item>
         <el-form-item label="模板描述"><el-input v-model="form.description" type="textarea" :rows="4" maxlength="500" show-word-limit :disabled="saving" /></el-form-item>
       </el-form>
-      <template #footer><el-button :disabled="saving" @click="formVisible=false">取消</el-button><el-button type="primary" :loading="saving" @click="saveTemplate">保存模板</el-button></template>
+      <template #footer><el-button :disabled="saving" @click="beforeCloseTemplate(() => { formVisible = false; })">取消</el-button><el-button type="primary" :loading="saving" @click="saveTemplate">保存模板</el-button></template>
     </el-dialog>
   </section>
 </template>

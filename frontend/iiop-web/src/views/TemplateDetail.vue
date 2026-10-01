@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, reactive, ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, onUnmounted, reactive, ref } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { useRoute, useRouter } from 'vue-router';
+import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router';
 import {
   VueFlow,
   Handle,
@@ -63,6 +63,39 @@ const flowEdges = ref<any[]>([]);
 const flowSaving = ref(false);
 const flowWarning = ref('');
 const selectedEdgeId = ref<string | null>(null);
+const flowSnapshot = ref('');
+
+function takeFlowSnapshot() {
+  flowSnapshot.value = JSON.stringify({
+    nodes: flowNodes.value.map((n) => ({
+      id: n.id,
+      x: Math.round(n.position?.x ?? 0),
+      y: Math.round(n.position?.y ?? 0)
+    })),
+    edges: flowEdges.value.map((e) => ({
+      id: e.id,
+      source: e.source,
+      target: e.target
+    }))
+  });
+}
+
+const flowDirty = computed(() => {
+  if (!flowNodes.value.length && !flowSnapshot.value) return false;
+  const current = JSON.stringify({
+    nodes: flowNodes.value.map((n) => ({
+      id: n.id,
+      x: Math.round(n.position?.x ?? 0),
+      y: Math.round(n.position?.y ?? 0)
+    })),
+    edges: flowEdges.value.map((e) => ({
+      id: e.id,
+      source: e.source,
+      target: e.target
+    }))
+  });
+  return current !== flowSnapshot.value;
+});
 
 const { fitView } = useVueFlow();
 
@@ -72,6 +105,17 @@ const editingItemId = ref('');
 const itemSaving = ref(false);
 const deletingItemId = ref('');
 const itemForm = reactive<ItemForm>(emptyItem());
+const itemSnapshot = ref('');
+const itemDirty = computed(() => itemVisible.value && JSON.stringify(itemForm) !== itemSnapshot.value);
+
+async function beforeCloseItem(done: () => void) {
+  if (itemSaving.value) return;
+  if (!itemDirty.value) return done();
+  try {
+    await ElMessageBox.confirm('检查项修改尚未保存，确定放弃吗？', '放弃编辑', { type: 'warning' });
+    done();
+  } catch { /* 保留表单 */ }
+}
 
 const requiredPhoto = computed(() =>
   items.value.some((item) => item.itemType === 'PHOTO' && item.requiredFlag === 1)
@@ -95,6 +139,7 @@ function parseFlowDefinition(raw: string | null | undefined) {
   flowNodes.value = [];
   flowEdges.value = [];
   if (!raw || !raw.trim()) {
+    takeFlowSnapshot();
     return;
   }
   try {
@@ -110,6 +155,7 @@ function parseFlowDefinition(raw: string | null | undefined) {
     flowWarning.value =
       '历史流程定义格式暂无法可视化解析。您可以保留原数据，或点击“从检查项重新生成”。';
   }
+  takeFlowSnapshot();
 }
 
 async function load() {
@@ -184,13 +230,16 @@ function onConnect(connection: Connection) {
   if (flowEdges.value.some((e) => e.source === connection.source && e.target === connection.target)) {
     return;
   }
-  flowEdges.value.push({
-    id: edgeId,
-    source: connection.source,
-    target: connection.target,
-    animated: true,
-    style: { stroke: '#1769aa', strokeWidth: 2 }
-  });
+  flowEdges.value = [
+    ...flowEdges.value,
+    {
+      id: edgeId,
+      source: connection.source,
+      target: connection.target,
+      animated: true,
+      style: { stroke: '#1769aa', strokeWidth: 2 }
+    }
+  ];
 }
 
 function onEdgeClick(event: any) {
@@ -205,6 +254,7 @@ function deleteSelectedEdge() {
 }
 
 async function saveFlow() {
+  if (flowSaving.value) return;
   flowSaving.value = true;
   try {
     const payload = {
@@ -212,7 +262,7 @@ async function saveFlow() {
       nodes: flowNodes.value.map((n) => ({
         id: n.id,
         type: n.type || 'item',
-        position: { x: Math.round(n.position.x), y: Math.round(n.position.y) },
+        position: { x: Math.round(n.position?.x ?? 0), y: Math.round(n.position?.y ?? 0) },
         data: n.data
       })),
       edges: flowEdges.value.map((e) => ({
@@ -227,6 +277,7 @@ async function saveFlow() {
       flowDefinition: JSON.stringify(payload)
     });
     ElMessage.success('流程定义已成功保存');
+    takeFlowSnapshot();
     await load();
   } finally {
     flowSaving.value = false;
@@ -236,6 +287,7 @@ async function saveFlow() {
 function openCreateItem() {
   editingItemId.value = '';
   Object.assign(itemForm, emptyItem(), { sortOrder: items.value.length + 1 });
+  itemSnapshot.value = JSON.stringify(itemForm);
   itemVisible.value = true;
 }
 
@@ -254,6 +306,7 @@ function openEditItem(item: TemplateItem) {
     abnormalHint: item.abnormalHint ?? '',
     sortOrder: item.sortOrder
   });
+  itemSnapshot.value = JSON.stringify(itemForm);
   itemVisible.value = true;
 }
 
@@ -267,6 +320,7 @@ function changeItemType(type: ItemType) {
 }
 
 async function saveItem() {
+  if (itemSaving.value) return;
   if (!itemForm.itemCode.trim() || !itemForm.itemName.trim())
     return void ElMessage.warning('请填写检查项编码和名称');
   itemSaving.value = true;
@@ -281,6 +335,7 @@ async function saveItem() {
     else await request.post(`/api/inspection/templates/${templateId}/items`, payload);
     ElMessage.success(editingItemId.value ? '检查项更新成功' : '检查项创建成功');
     itemVisible.value = false;
+    itemSnapshot.value = JSON.stringify(itemForm);
     await load();
   } finally {
     itemSaving.value = false;
@@ -288,6 +343,7 @@ async function saveItem() {
 }
 
 async function deleteItem(item: TemplateItem) {
+  if (deletingItemId.value) return;
   try {
     await ElMessageBox.confirm(
       `确认删除检查项“${item.itemName}”吗？`,
@@ -307,7 +363,36 @@ async function deleteItem(item: TemplateItem) {
   }
 }
 
-onMounted(load);
+const hasUnsavedChanges = computed(() => flowDirty.value || itemDirty.value);
+
+function beforeUnload(event: BeforeUnloadEvent) {
+  if (!hasUnsavedChanges.value) return;
+  event.preventDefault();
+  event.returnValue = '';
+}
+
+onBeforeRouteLeave(async () => {
+  if (!hasUnsavedChanges.value) return true;
+  try {
+    await ElMessageBox.confirm('页面存在尚未保存的流程或检查项修改，确定离开吗？', '未保存修改', {
+      type: 'warning',
+      confirmButtonText: '离开',
+      cancelButtonText: '继续编辑'
+    });
+    return true;
+  } catch {
+    return false;
+  }
+});
+
+onMounted(() => {
+  window.addEventListener('beforeunload', beforeUnload);
+  void load();
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener('beforeunload', beforeUnload);
+});
 </script>
 
 <template>
@@ -461,9 +546,10 @@ onMounted(load);
               <el-button
                 type="primary"
                 :loading="flowSaving"
+                :disabled="flowSaving || !flowNodes.length"
                 @click="saveFlow"
               >
-                保存流程定义
+                保存流程定义{{ flowDirty ? ' (未保存)' : '' }}
               </el-button>
             </div>
           </div>
@@ -529,6 +615,7 @@ onMounted(load);
       :title="editingItemId ? '编辑检查项' : '新增检查项'"
       width="760px"
       :close-on-click-modal="!itemSaving"
+      :before-close="beforeCloseItem"
     >
       <el-alert
         v-if="editingPhoto"
@@ -658,7 +745,7 @@ onMounted(load);
         </el-row>
       </el-form>
       <template #footer>
-        <el-button :disabled="itemSaving" @click="itemVisible = false">取消</el-button>
+        <el-button :disabled="itemSaving" @click="beforeCloseItem(() => { itemVisible = false; })">取消</el-button>
         <el-button type="primary" :loading="itemSaving" @click="saveItem">保存检查项</el-button>
       </template>
     </el-dialog>

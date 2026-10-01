@@ -198,7 +198,7 @@ onUnmounted(() => {
                     >
                       查看对应业务详情 →
                     </el-button>
-                    <span v-else class="biz-id-text">ID: {{ item.bizId }}</span>
+                    <span v-else class="biz-id-text">暂无可跳转业务</span>
                   </template>
                 </div>
 

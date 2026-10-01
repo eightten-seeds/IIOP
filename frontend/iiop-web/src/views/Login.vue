@@ -44,6 +44,7 @@ async function fetchCaptcha() {
 }
 
 async function handleLogin() {
+  if (loading.value) return;
   loginError.value = '';
   if (!loginForm.username.trim()) {
     return void ElMessage.warning('请输入用户名');
