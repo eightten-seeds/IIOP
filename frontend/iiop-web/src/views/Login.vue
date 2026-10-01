@@ -166,6 +166,7 @@ onMounted(() => {
 
         <div class="form-options">
           <el-checkbox v-model="rememberUsername">记住用户名</el-checkbox>
+          <span class="forgot-pwd-tip">忘记密码？请联系系统管理员重置。</span>
         </div>
 
         <el-button
@@ -293,6 +294,12 @@ onMounted(() => {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 20px;
+}
+
+.forgot-pwd-tip {
+  font-size: 12px;
+  color: #64748b;
+  user-select: none;
 }
 
 .submit-button {

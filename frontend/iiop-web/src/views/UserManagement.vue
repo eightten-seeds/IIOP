@@ -261,11 +261,26 @@ async function deleteUser(row: UserSummary) {
   }
 }
 
-function openResetPassword(row: UserSummary) {
+const resetCheckingId = ref('');
+
+async function openResetPassword(row: UserSummary) {
   if (row.id === auth.currentUser?.id) {
     ElMessage.warning('不能在用户列表中重置自身密码，请使用右上角个人中心修改');
     return;
   }
+  resetCheckingId.value = row.id;
+  try {
+    const assigned = await targetRoles(row.id);
+    if (assigned.some((r) => r.roleCode === 'SUPER_ADMIN') && !canManageSuperAdmin.value) {
+      ElMessage.warning('普通管理员不能重置超级管理员密码');
+      return;
+    }
+  } catch {
+    return;
+  } finally {
+    resetCheckingId.value = '';
+  }
+
   resetUser.value = row;
   resetForm.newPassword = '';
   resetForm.confirmPassword = '';
@@ -342,6 +357,7 @@ onMounted(async () => {
             <el-button
               v-if="auth.can('system:user:update')"
               link
+              :loading="resetCheckingId === scope.row.id"
               :disabled="scope.row.id === auth.currentUser?.id"
               :title="scope.row.id === auth.currentUser?.id ? '不能在此重置自身密码，请使用右上角个人中心修改' : ''"
               @click="openResetPassword(scope.row)"
