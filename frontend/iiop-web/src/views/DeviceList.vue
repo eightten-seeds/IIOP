@@ -196,7 +196,10 @@ onMounted(load);
   <section class="device-page">
     <div class="page-head">
       <div><h1>设备档案</h1><p>集中查看设备状态、风险与责任信息；管理操作按权限开放。</p></div>
-      <el-button v-if="auth.can('device:create')" type="primary" @click="openCreate">新增设备</el-button>
+      <div class="head-actions">
+        <el-button @click="router.push('/devices/scene')">设备空间视图</el-button>
+        <el-button v-if="auth.can('device:create')" type="primary" @click="openCreate">新增设备</el-button>
+      </div>
     </div>
 
     <el-card class="filter-card" shadow="never">
