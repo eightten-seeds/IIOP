@@ -1,5 +1,6 @@
 -- IIOP M1: 安全的虚构演示数据
 -- 本文件不创建用户账号，不写入明文密码、API Key、Token、真实手机号或真实邮箱。
+SET NAMES utf8mb4;
 
 USE iiop_auth;
 
