@@ -18,12 +18,13 @@ import DeviceList from '../views/DeviceList.vue';
 import DeviceDetail from '../views/DeviceDetail.vue';
 import TemplateList from '../views/TemplateList.vue';
 import PlanList from '../views/PlanList.vue';
+import TaskList from '../views/TaskList.vue';
+import AbnormalList from '../views/AbnormalList.vue';
+import AbnormalDetail from '../views/AbnormalDetail.vue';
 
 type ResourceRoute = [path: string, title: string, api: string, permission: string | null];
 
 const resources: ResourceRoute[] = [
-  ['inspection/tasks', '巡检任务', '/api/inspection/tasks', 'inspection:view'],
-  ['inspection/abnormals', '巡检异常', '/api/inspection/abnormals', 'inspection:view'],
   ['maintenance/defects', '维修缺陷', '/api/maintenance/defects', 'maintenance:view'],
   ['maintenance/work-orders', '维修工单', '/api/maintenance/work-orders', 'maintenance:view'],
   ['ai/diagnoses', 'AI诊断', '/api/ai/diagnoses', 'ai:view'],
@@ -37,6 +38,10 @@ const children: RouteRecordRaw[] = [
   { path: '/inspection/templates', component: TemplateList, meta: { title: '巡检模板', permission: 'inspection:view', roles: ['SUPER_ADMIN', 'ADMIN'] } },
   { path: '/inspection/templates/:id', component: TemplateDetail, meta: { title: '模板详情', permission: 'inspection:view', roles: ['SUPER_ADMIN', 'ADMIN'] } },
   { path: '/inspection/plans', component: PlanList, meta: { title: '巡检计划', permission: 'inspection:view', roles: ['SUPER_ADMIN', 'ADMIN'] } },
+  { path: '/inspection/tasks', component: TaskList, meta: { title: '巡检任务', permission: 'inspection:view', roles: ['SUPER_ADMIN', 'ADMIN', 'INSPECTOR'] } },
+  { path: '/inspection/tasks/:id', component: TaskDetail, meta: { title: '任务详情', permission: 'inspection:view', roles: ['SUPER_ADMIN', 'ADMIN', 'INSPECTOR'] } },
+  { path: '/inspection/abnormals', component: AbnormalList, meta: { title: '巡检异常', permission: 'inspection:view', roles: ['SUPER_ADMIN', 'ADMIN', 'INSPECTOR'] } },
+  { path: '/inspection/abnormals/:id', component: AbnormalDetail, meta: { title: '异常详情', permission: 'inspection:view', roles: ['SUPER_ADMIN', 'ADMIN', 'INSPECTOR'] } },
   { path: '/system/users', component: UserManagement, meta: { title: '用户管理', permission: 'system:user:view' } },
   { path: '/system/roles', component: RoleReadOnly, meta: { title: '角色查看', permission: 'system:role:view' } },
   { path: '/system/permissions', component: PermissionReadOnly, meta: { title: '权限查看', permission: 'system:permission:view' } }
@@ -44,8 +49,7 @@ const children: RouteRecordRaw[] = [
 
 resources.forEach(([path, title, api, permission]) => {
   children.push({ path: `/${path}`, component: Resource, props: { title, api, kind: path }, meta: { title, permission } });
-  if (path === 'inspection/tasks') children.push({ path: `/${path}/:id`, component: TaskDetail, meta: { title, permission } });
-  else if (path === 'maintenance/work-orders') children.push({ path: `/${path}/:id`, component: WorkOrderDetail, meta: { title, permission } });
+  if (path === 'maintenance/work-orders') children.push({ path: `/${path}/:id`, component: WorkOrderDetail, meta: { title, permission } });
   else if (path === 'ai/diagnoses') children.push({ path: `/${path}/:id`, component: AiDetail, meta: { title, permission } });
   else if (path !== 'notifications') children.push({ path: `/${path}/:id`, component: Detail, props: { title, api, kind: path }, meta: { title, permission } });
 });
