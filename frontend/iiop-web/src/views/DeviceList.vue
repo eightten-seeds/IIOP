@@ -59,8 +59,16 @@ async function resolveResponsibleNames(devices: Device[]) {
   if (!auth.can('system:user:view')) return;
   const ids = [...new Set(devices.map((device) => device.responsibleUserId).filter((id): id is string => Boolean(id)))].filter((id) => !responsibleNames[id]);
   await Promise.allSettled(ids.map(async (id) => {
-    const user = await request.get<never, UserSummary>(`/api/auth/users/${id}`);
-    responsibleNames[id] = userLabel(user);
+    try {
+      const user = await request.get<never, UserSummary>(`/api/auth/users/${id}`, { silentStatuses: [404] });
+      responsibleNames[id] = userLabel(user);
+    } catch (err: any) {
+      if (err.response?.status === 404) {
+        responsibleNames[id] = '原负责人（账号已删除）';
+      } else {
+        responsibleNames[id] = '人员信息暂不可用';
+      }
+    }
   }));
 }
 
@@ -112,8 +120,16 @@ async function searchUsers(keyword = '') {
 
 async function ensureResponsibleOption(id: string | null) {
   if (!id || userOptions.value.some((user) => user.id === id) || !auth.can('system:user:view')) return;
-  const user = await request.get<never, UserSummary>(`/api/auth/users/${id}`);
-  userOptions.value = [user, ...userOptions.value];
+  try {
+    const user = await request.get<never, UserSummary>(`/api/auth/users/${id}`, { silentStatuses: [404] });
+    userOptions.value = [user, ...userOptions.value];
+  } catch (err: any) {
+    if (err.response?.status === 404) {
+      responsibleNames[id] = '原负责人（账号已删除）';
+    } else {
+      responsibleNames[id] = '人员信息暂不可用';
+    }
+  }
 }
 
 async function openCreate() {

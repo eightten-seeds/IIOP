@@ -73,7 +73,18 @@ async function resolveNames(plans: InspectionPlan[]) {
   await Promise.allSettled([
     ...deviceIds.map(async id => { const value = await request.get<never, Device>(`/api/device/devices/${id}`); deviceNames[id] = deviceLabel(value); }),
     ...templateIds.map(async id => { const value = await request.get<never, InspectionTemplate>(`/api/inspection/templates/${id}`); templateNames[id] = templateLabel(value); }),
-    ...userIds.map(async id => { const value = await request.get<never, UserSummary>(`/api/auth/users/${id}`); inspectorNames[id] = userLabel(value); })
+    ...userIds.map(async id => {
+      try {
+        const value = await request.get<never, UserSummary>(`/api/auth/users/${id}`, { silentStatuses: [404] });
+        inspectorNames[id] = userLabel(value);
+      } catch (err: any) {
+        if (err.response?.status === 404) {
+          inspectorNames[id] = '原巡检员（账号已删除）';
+        } else {
+          inspectorNames[id] = '人员信息暂不可用';
+        }
+      }
+    })
   ]);
 }
 
@@ -109,9 +120,17 @@ async function ensureTemplate(id: string) {
 }
 async function ensureInspector(id: string) {
   if (!id || inspectorOptions.value.some(value => value.id === id)) return;
-  const value = await request.get<never, UserSummary>(`/api/auth/users/${id}`);
-  inspectorOptions.value = [value, ...inspectorOptions.value];
-  inspectorNames[id] = userLabel(value);
+  try {
+    const value = await request.get<never, UserSummary>(`/api/auth/users/${id}`, { silentStatuses: [404] });
+    inspectorOptions.value = [value, ...inspectorOptions.value];
+    inspectorNames[id] = userLabel(value);
+  } catch (err: any) {
+    if (err.response?.status === 404) {
+      inspectorNames[id] = '原巡检员（账号已删除）';
+    } else {
+      inspectorNames[id] = '人员信息暂不可用';
+    }
+  }
 }
 
 async function checkTemplate(id: string) {

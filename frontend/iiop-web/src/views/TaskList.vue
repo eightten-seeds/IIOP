@@ -52,8 +52,16 @@ async function resolveNames(tasks: InspectionTask[]) {
   const assigneeIds = [...new Set(tasks.map(task => task.assigneeUserId))].filter(id => !assigneeNames[id]);
   if (auth.currentUser) assigneeNames[auth.currentUser.id] = `${auth.currentUser.realName || auth.currentUser.username}（${auth.currentUser.username}）`;
   const userRequests = auth.can('system:user:view') ? assigneeIds.map(async id => {
-    const user = await request.get<never, UserSummary>(`/api/auth/users/${id}`);
-    assigneeNames[id] = `${user.realName || user.username}（${user.username}）`;
+    try {
+      const user = await request.get<never, UserSummary>(`/api/auth/users/${id}`, { silentStatuses: [404] });
+      assigneeNames[id] = `${user.realName || user.username}（${user.username}）`;
+    } catch (err: any) {
+      if (err.response?.status === 404) {
+        assigneeNames[id] = '原巡检员（账号已删除）';
+      } else {
+        assigneeNames[id] = '人员信息暂不可用';
+      }
+    }
   }) : [];
   await Promise.allSettled([
     ...deviceIds.map(async id => { const device = await request.get<never, Device>(`/api/device/devices/${id}`); deviceNames[id] = deviceLabel(device); }),

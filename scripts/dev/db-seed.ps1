@@ -14,10 +14,19 @@ if (-not (Test-Path $sqlFile)) {
 }
 
 Write-Output "Executing UTF-8 seed import via mysql client..."
-if ($env:MYSQL_AUTH_PASSWORD) {
-    & mysql --default-character-set=utf8mb4 -u $user "-p$($env:MYSQL_AUTH_PASSWORD)" -h 127.0.0.1 -e "source $sqlFile"
-} else {
+$hadPwd = Test-Path Env:\MYSQL_PWD
+$origPwd = if ($hadPwd) { $env:MYSQL_PWD } else { $null }
+try {
+    if ($env:MYSQL_AUTH_PASSWORD) {
+        $env:MYSQL_PWD = $env:MYSQL_AUTH_PASSWORD
+    }
     & mysql --default-character-set=utf8mb4 -u $user -h 127.0.0.1 -e "source $sqlFile"
+} finally {
+    if ($hadPwd) {
+        $env:MYSQL_PWD = $origPwd
+    } else {
+        Remove-Item Env:\MYSQL_PWD -ErrorAction SilentlyContinue
+    }
 }
 
 if ($LASTEXITCODE -eq 0) {

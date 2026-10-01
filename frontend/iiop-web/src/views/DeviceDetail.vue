@@ -59,10 +59,14 @@ async function load() {
     Object.assign(categoryNames, categoryNameMap(tree ?? []));
     if (current.responsibleUserId && auth.can('system:user:view')) {
       try {
-        const user = await request.get<never, UserSummary>(`/api/auth/users/${current.responsibleUserId}`);
+        const user = await request.get<never, UserSummary>(`/api/auth/users/${current.responsibleUserId}`, { silentStatuses: [404] });
         responsibleName.value = userLabel(user);
-      } catch {
-        responsibleName.value = '负责人信息暂不可用';
+      } catch (err: any) {
+        if (err.response?.status === 404) {
+          responsibleName.value = '原负责人（账号已删除）';
+        } else {
+          responsibleName.value = '人员信息暂不可用';
+        }
       }
     }
   } catch {

@@ -49,7 +49,18 @@ async function load() {
     taskDetail.value = taskResult;
     device.value = deviceResult;
     if (auth.currentUser?.id === current.reportedBy) reporterName.value = `${auth.currentUser.realName || auth.currentUser.username}（${auth.currentUser.username}）`;
-    else if (auth.can('system:user:view')) await Promise.allSettled([request.get<never, UserSummary>(`/api/auth/users/${current.reportedBy}`).then(user => { reporterName.value = `${user.realName || user.username}（${user.username}）`; })]);
+    else if (auth.can('system:user:view')) {
+      try {
+        const user = await request.get<never, UserSummary>(`/api/auth/users/${current.reportedBy}`, { silentStatuses: [404] });
+        reporterName.value = `${user.realName || user.username}（${user.username}）`;
+      } catch (err: any) {
+        if (err.response?.status === 404) {
+          reporterName.value = '原上报人（账号已删除）';
+        } else {
+          reporterName.value = '人员信息暂不可用';
+        }
+      }
+    }
     await loadRelated();
   } catch { errorMessage.value = '巡检异常详情加载失败，可能无权访问或服务暂不可用。'; }
   finally { loading.value = false; }

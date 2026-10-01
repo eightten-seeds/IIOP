@@ -2,6 +2,12 @@ import axios, { AxiosError } from 'axios';
 import { ElMessage } from 'element-plus';
 import { useAuthStore } from '../stores/auth';
 
+declare module 'axios' {
+  export interface AxiosRequestConfig {
+    silentStatuses?: number[];
+  }
+}
+
 interface ApiEnvelope<T = unknown> {
   code?: number;
   message?: string;
@@ -32,6 +38,10 @@ request.interceptors.response.use(
   },
   (error: AxiosError<ApiEnvelope>) => {
     const status = error.response?.status;
+    const silentStatuses = error.config?.silentStatuses || [];
+    if (status && silentStatuses.includes(status)) {
+      return Promise.reject(error);
+    }
     const backendMessage = error.response?.data?.message || error.response?.data?.msg;
     if (status === 401) {
       if (!handlingUnauthorized) {

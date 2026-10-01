@@ -53,7 +53,19 @@ async function resolveRelated() {
   const currentTask = task.value;
   const jobs: Promise<unknown>[] = [request.get<never, Device>(`/api/device/devices/${currentTask.deviceId}`).then(value => { device.value = value; })];
   if (auth.currentUser?.id === currentTask.assigneeUserId) assigneeName.value = `${auth.currentUser.realName || auth.currentUser.username}（${auth.currentUser.username}）`;
-  else if (auth.can('system:user:view')) jobs.push(request.get<never, UserSummary>(`/api/auth/users/${currentTask.assigneeUserId}`).then(user => { assigneeName.value = `${user.realName || user.username}（${user.username}）`; }));
+  else if (auth.can('system:user:view')) {
+    jobs.push(
+      request.get<never, UserSummary>(`/api/auth/users/${currentTask.assigneeUserId}`, { silentStatuses: [404] })
+        .then(user => { assigneeName.value = `${user.realName || user.username}（${user.username}）`; })
+        .catch((err: any) => {
+          if (err.response?.status === 404) {
+            assigneeName.value = '原巡检员（账号已删除）';
+          } else {
+            assigneeName.value = '人员信息暂不可用';
+          }
+        })
+    );
+  }
   await Promise.allSettled(jobs);
 }
 
