@@ -1,0 +1,13 @@
+export type DefectStatus = 'OPEN' | 'CONFIRMED' | 'PROCESSING' | 'RESOLVED' | 'CLOSED';
+export type WorkOrderStatus = 'PENDING' | 'ASSIGNED' | 'PROCESSING' | 'WAITING_ACCEPTANCE' | 'COMPLETED';
+
+export interface Defect { id:string; defectCode:string; deviceId:string; sourceType:string; sourceId:string|null; title:string; description:string|null; severity:string; reportedBy:string|null; reportedAt:string; status:DefectStatus; aiDiagnosisId:string|null; resolvedAt:string|null; createdAt:string; updatedAt:string }
+export interface WorkOrder { id:string; workOrderCode:string; defectId:string|null; deviceId:string; title:string; description:string|null; workOrderType:string; priority:string; status:WorkOrderStatus; creatorUserId:string; assigneeUserId:string|null; plannedStartTime:string|null; plannedEndTime:string|null; actualStartTime:string|null; actualEndTime:string|null; aiDiagnosisId:string|null; closeResult:string|null; createdAt:string; updatedAt:string }
+export interface WorkOrderLog { id:string; action:string; fromStatus:string; toStatus:string; operatorUserId:string; comment:string|null; createdAt:string }
+export interface MaintenanceRecord { id:string; faultCause:string|null; solution:string|null; partsUsed:string|null; downtimeMinutes:number|null; maintenanceCost:number|null; result:string; repairedBy:string; repairedAt:string }
+export interface Acceptance { id:string; acceptanceResult:string; acceptanceContent:string|null; acceptedBy:string; acceptedAt:string }
+export interface WorkOrderDetailData { workOrder:WorkOrder; logs:WorkOrderLog[]; records:MaintenanceRecord[]; acceptances:Acceptance[] }
+export interface Diagnosis { id:string; diagnosisCode:string; triggerType:string; triggerId:string|null; deviceId:string; abnormalSummary:string|null; userDescription:string|null; riskLevel:string; possibleCauses:string[]; investigationSteps:string[]; maintenanceAdvice:string|null; safetyNotice:string|null; modelName:string|null; promptVersion:string|null; diagnosisStatus:string; confirmationStatus:string; confirmedBy:string|null; confirmedAt:string|null; confirmationComment:string|null; errorMessage:string|null; createdAt:string; updatedAt:string }
+export interface WorkOrderDraft { title:string; description:string; priority:string; maintenanceAdvice:string; safetyNotice:string }
+export interface DiagnosisView { diagnosis:Diagnosis; possibleCauses:string[]; investigationSteps:string[]; workOrderDraft:WorkOrderDraft; humanConfirmationRequired:boolean }
+export interface WorkflowTrace { id:string; nodeCode:string; nodeName:string; nodeStatus:string; inputSummary:string|null; outputData:string|null; errorMessage:string|null; startedAt:string; finishedAt:string|null }

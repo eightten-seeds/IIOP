@@ -4,7 +4,6 @@ import Login from '../views/Login.vue';
 import Layout from '../layouts/AdminLayout.vue';
 import Dashboard from '../views/Dashboard.vue';
 import Resource from '../views/Resource.vue';
-import Detail from '../views/Detail.vue';
 import TaskDetail from '../views/TaskDetail.vue';
 import TemplateDetail from '../views/TemplateDetail.vue';
 import WorkOrderDetail from '../views/WorkOrderDetail.vue';
@@ -22,6 +21,10 @@ import PlanList from '../views/PlanList.vue';
 import TaskList from '../views/TaskList.vue';
 import AbnormalList from '../views/AbnormalList.vue';
 import AbnormalDetail from '../views/AbnormalDetail.vue';
+import DefectList from '../views/DefectList.vue';
+import DefectDetail from '../views/DefectDetail.vue';
+import WorkOrderList from '../views/WorkOrderList.vue';
+import AiList from '../views/AiList.vue';
 import '../utils/navigation';
 
 const children: RouteRecordRaw[] = [
@@ -141,8 +144,7 @@ const children: RouteRecordRaw[] = [
   // 4. 维修管理
   {
     path: '/maintenance/defects',
-    component: Resource,
-    props: { title: '缺陷管理', api: '/api/maintenance/defects', kind: 'maintenance/defects' },
+    component: DefectList,
     meta: {
       title: '缺陷管理',
       permission: 'maintenance:view',
@@ -153,8 +155,7 @@ const children: RouteRecordRaw[] = [
   },
   {
     path: '/maintenance/defects/:id',
-    component: Detail,
-    props: { title: '缺陷详情', api: '/api/maintenance/defects', kind: 'maintenance/defects' },
+    component: DefectDetail,
     meta: {
       title: '缺陷详情',
       permission: 'maintenance:view',
@@ -165,8 +166,7 @@ const children: RouteRecordRaw[] = [
   },
   {
     path: '/maintenance/work-orders',
-    component: Resource,
-    props: { title: '维修工单', api: '/api/maintenance/work-orders', kind: 'maintenance/work-orders' },
+    component: WorkOrderList,
     meta: {
       title: '维修工单',
       permission: 'maintenance:view',
@@ -189,8 +189,7 @@ const children: RouteRecordRaw[] = [
   // 5. AI 诊断
   {
     path: '/ai/diagnoses',
-    component: Resource,
-    props: { title: 'AI 诊断', api: '/api/ai/diagnoses', kind: 'ai/diagnoses' },
+    component: AiList,
     meta: {
       title: 'AI 诊断',
       permission: 'ai:view',
