@@ -47,7 +47,7 @@ public class DemoAccountInitializer implements ApplicationRunner {
     @Override
     @Transactional
     public void run(ApplicationArguments args) {
-        createIfMissing("admin", "SUPER_ADMIN", superAdminPassword);
+        createIfMissing("super_demo", "SUPER_ADMIN", superAdminPassword);
         createIfMissing("admin_demo", "ADMIN", adminPassword);
         createIfMissing("inspector_demo", "INSPECTOR", inspectorPassword);
         createIfMissing("maintainer_demo", "MAINTAINER", maintainerPassword);
