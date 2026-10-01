@@ -16,12 +16,12 @@ import RoleReadOnly from '../views/RoleReadOnly.vue';
 import PermissionReadOnly from '../views/PermissionReadOnly.vue';
 import DeviceList from '../views/DeviceList.vue';
 import DeviceDetail from '../views/DeviceDetail.vue';
+import TemplateList from '../views/TemplateList.vue';
+import PlanList from '../views/PlanList.vue';
 
 type ResourceRoute = [path: string, title: string, api: string, permission: string | null];
 
 const resources: ResourceRoute[] = [
-  ['inspection/templates', '巡检模板', '/api/inspection/templates', 'inspection:view'],
-  ['inspection/plans', '巡检计划', '/api/inspection/plans', 'inspection:view'],
   ['inspection/tasks', '巡检任务', '/api/inspection/tasks', 'inspection:view'],
   ['inspection/abnormals', '巡检异常', '/api/inspection/abnormals', 'inspection:view'],
   ['maintenance/defects', '维修缺陷', '/api/maintenance/defects', 'maintenance:view'],
@@ -34,6 +34,9 @@ const children: RouteRecordRaw[] = [
   { path: '/dashboard', component: Dashboard, meta: { title: '工作台', permission: 'dashboard:view' } },
   { path: '/devices', component: DeviceList, meta: { title: '设备档案', permission: 'device:view' } },
   { path: '/devices/:id', component: DeviceDetail, meta: { title: '设备详情', permission: 'device:view' } },
+  { path: '/inspection/templates', component: TemplateList, meta: { title: '巡检模板', permission: 'inspection:view', roles: ['SUPER_ADMIN', 'ADMIN'] } },
+  { path: '/inspection/templates/:id', component: TemplateDetail, meta: { title: '模板详情', permission: 'inspection:view', roles: ['SUPER_ADMIN', 'ADMIN'] } },
+  { path: '/inspection/plans', component: PlanList, meta: { title: '巡检计划', permission: 'inspection:view', roles: ['SUPER_ADMIN', 'ADMIN'] } },
   { path: '/system/users', component: UserManagement, meta: { title: '用户管理', permission: 'system:user:view' } },
   { path: '/system/roles', component: RoleReadOnly, meta: { title: '角色查看', permission: 'system:role:view' } },
   { path: '/system/permissions', component: PermissionReadOnly, meta: { title: '权限查看', permission: 'system:permission:view' } }
@@ -42,10 +45,9 @@ const children: RouteRecordRaw[] = [
 resources.forEach(([path, title, api, permission]) => {
   children.push({ path: `/${path}`, component: Resource, props: { title, api, kind: path }, meta: { title, permission } });
   if (path === 'inspection/tasks') children.push({ path: `/${path}/:id`, component: TaskDetail, meta: { title, permission } });
-  else if (path === 'inspection/templates') children.push({ path: `/${path}/:id`, component: TemplateDetail, meta: { title, permission } });
   else if (path === 'maintenance/work-orders') children.push({ path: `/${path}/:id`, component: WorkOrderDetail, meta: { title, permission } });
   else if (path === 'ai/diagnoses') children.push({ path: `/${path}/:id`, component: AiDetail, meta: { title, permission } });
-  else if (!['notifications', 'inspection/plans'].includes(path)) children.push({ path: `/${path}/:id`, component: Detail, props: { title, api, kind: path }, meta: { title, permission } });
+  else if (path !== 'notifications') children.push({ path: `/${path}/:id`, component: Detail, props: { title, api, kind: path }, meta: { title, permission } });
 });
 
 const router = createRouter({
@@ -78,6 +80,8 @@ router.beforeEach(async (to) => {
   if (to.path === '/403') return true;
   const permission = to.meta.permission as string | undefined;
   if (permission && !auth.can(permission)) return '/403';
+  const roles = to.meta.roles as string[] | undefined;
+  if (roles && !roles.some(role => auth.roles.includes(role))) return '/403';
   return true;
 });
 
