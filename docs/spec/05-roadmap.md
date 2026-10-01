@@ -350,4 +350,4 @@ S4-A：当前阶段
 
 当前：
 
-**S4-A Gate 1 已通过。角色/数据范围/业务流程/人机交互已冻结到 06-role-usecases.md，下一步进入 Gate 2，先补最小后端业务约束与关联能力，再开发业务化页面。**
+**S4-A PACK 2 已完成。Defect、WorkOrder、AI 已使用专用业务页面，真实链路已通过 Gateway、MySQL、Redis、RocketMQ 与 DeepSeek 跑通：巡检异常 → 缺陷 → AI 五节点诊断与人工确认 → 显式绑定 → 工单分派/维修/验收 → 缺陷关闭。下一步等待独立验收，不提前进入 PACK 3。**
