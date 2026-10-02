@@ -1,0 +1,13 @@
+{
+  "apiType": "stageMode",
+  "buildOption": {},
+  "buildOptionSet": [
+    { "name": "release", "arkOptions": { "obfuscation": { "ruleOptions": { "enable": true, "files": ["./obfuscation-rules.txt"] } } } },
+    { "name": "debug", "debuggable": true, "arkOptions": { "obfuscation": { "ruleOptions": { "enable": false } } } }
+  ],
+  "buildModeBinder": [
+    { "buildModeName": "release", "mappings": [{ "buildOptionName": "release", "targetName": "default" }] },
+    { "buildModeName": "debug", "mappings": [{ "buildOptionName": "debug", "targetName": "default" }] }
+  ],
+  "targets": [{ "name": "default" }, { "name": "ohosTest" }]
+}

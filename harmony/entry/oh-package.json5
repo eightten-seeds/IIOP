@@ -1,0 +1,7 @@
+{
+  "modelVersion": "26.0.0",
+  "name": "entry",
+  "version": "1.0.0",
+  "description": "IIOP entry module",
+  "dependencies": {}
+}

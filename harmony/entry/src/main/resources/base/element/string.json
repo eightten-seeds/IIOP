@@ -1,0 +1,7 @@
+{
+  "string": [
+    { "name": "module_desc", "value": "IIOP 工业现场运维" },
+    { "name": "EntryAbility_desc", "value": "IIOP 移动现场工作台" },
+    { "name": "EntryAbility_label", "value": "IIOP" }
+  ]
+}

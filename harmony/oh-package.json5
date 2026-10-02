@@ -1,0 +1,8 @@
+{
+  "modelVersion": "26.0.0",
+  "name": "iiop-harmony",
+  "version": "1.0.0",
+  "description": "IIOP HarmonyOS industrial field client",
+  "dependencies": {},
+  "devDependencies": { "@ohos/hvigor-ohos-plugin": "6.26.4" }
+}

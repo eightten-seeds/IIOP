@@ -1,0 +1,4 @@
+export interface Diagnosis { id: string; diagnosisCode: string; triggerType: string; triggerId?: string; deviceId: string; abnormalSummary?: string; riskLevel: string; possibleCauses: string[]; investigationSteps: string[]; maintenanceAdvice?: string; safetyNotice?: string; diagnosisStatus: string; confirmationStatus: string; createdAt: string }
+export interface WorkOrderDraft { title: string; description: string; priority: string; maintenanceAdvice: string; safetyNotice: string }
+export interface DiagnosisView { diagnosis: Diagnosis; possibleCauses: string[]; investigationSteps: string[]; workOrderDraft?: WorkOrderDraft; humanConfirmationRequired: boolean }
+export interface WorkflowTrace { id: string; nodeCode: string; nodeName: string; status: string; startedAt?: string; finishedAt?: string; message: string }
