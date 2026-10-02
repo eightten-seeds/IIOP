@@ -133,12 +133,12 @@ const todayGuidance = computed(() => {
   if (isInspector.value) {
     if (taskMetrics.value.pending > 0) return `今天有 ${taskMetrics.value.pending} 项待执行巡检任务，请尽快前往现场开展检查。`;
     if (taskMetrics.value.inProgress > 0) return `当前有 ${taskMetrics.value.inProgress} 项巡检任务正在进行中，请及时录入检查数据并提交。`;
-    return '今日巡检任务均已处理完毕，现场设备运行状态良好。';
+    return '当前没有待处理巡检任务。';
   }
   if (isMaintainer.value) {
     if (workOrderMetrics.value.assigned > 0) return `今天有 ${workOrderMetrics.value.assigned} 单已分派给您的待维修工单，请及时开工。`;
     if (workOrderMetrics.value.processing > 0) return `当前有 ${workOrderMetrics.value.processing} 单正在维修中，完成维修后请如实提交处理结果。`;
-    return '暂无待处理维修工单，设备维护平稳受控。';
+    return '当前没有待处理维修工单。';
   }
   const pendingItems: string[] = [];
   if (taskMetrics.value.pending > 0) pendingItems.push(`${taskMetrics.value.pending} 项待执行巡检`);
