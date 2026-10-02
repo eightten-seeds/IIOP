@@ -49,6 +49,33 @@ const localDate = () => {
   return `${year}-${month}-${day}`;
 };
 
+function scheduleRuleText(plan: InspectionPlan) {
+  const typeMap: Record<string, string> = {
+    DAILY: '每日执行',
+    WEEKLY: '每周执行',
+    MONTHLY: '每月执行',
+    CRON: `CRON 规则 (${plan.cronExpression || '-'})`
+  };
+  return typeMap[plan.scheduleType] || displayValue(plan.scheduleType);
+}
+
+function executionPeriodText(plan: InspectionPlan) {
+  if (!plan.startDate && !plan.endDate) return '长期有效';
+  if (plan.startDate && !plan.endDate) return `${plan.startDate} 起有效`;
+  if (!plan.startDate && plan.endDate) return `截止 ${plan.endDate}`;
+  return `${plan.startDate} 至 ${plan.endDate}`;
+}
+
+function friendlyTime(value: string | null) {
+  if (!value) return '尚未生成';
+  const clean = value.replace('T', ' ').slice(0, 16);
+  const today = localDate();
+  if (clean.startsWith(today)) {
+    return `今日 ${clean.slice(11)}`;
+  }
+  return clean;
+}
+
 async function searchDevices(keyword = '') {
   deviceLoading.value = true;
   try {
@@ -271,19 +298,53 @@ onBeforeUnmount(() => {
     <el-card shadow="never">
       <el-alert v-if="errorMessage" :title="errorMessage" type="error" show-icon :closable="false"><template #default><el-button link type="primary" @click="load">重新加载</el-button></template></el-alert>
       <el-table v-else v-loading="loading" :data="rows" row-key="id">
-        <el-table-column prop="planCode" label="计划编码" min-width="145" />
-        <el-table-column prop="planName" label="计划名称" min-width="170" />
-        <el-table-column label="设备" min-width="220"><template #default="scope">{{ deviceNames[scope.row.deviceId] || '设备信息加载中' }}</template></el-table-column>
-        <el-table-column label="模板" min-width="230"><template #default="scope">{{ templateNames[scope.row.templateId] || '模板信息加载中' }}</template></el-table-column>
-        <el-table-column label="巡检人员" min-width="160"><template #default="scope">{{ inspectorNames[scope.row.assigneeUserId] || '人员信息加载中' }}</template></el-table-column>
-        <el-table-column label="周期" width="100"><template #default="scope">{{ displayValue(scope.row.scheduleType) }}</template></el-table-column>
-        <el-table-column label="状态" width="90"><template #default="scope"><el-tag :type="scope.row.status==='ENABLED'?'success':'info'">{{ displayValue(scope.row.status) }}</el-tag></template></el-table-column>
-        <el-table-column label="上次生成" min-width="150"><template #default="scope">{{ dateTime(scope.row.lastGenerateTime) }}</template></el-table-column>
-        <el-table-column label="下次生成" min-width="150"><template #default="scope">{{ dateTime(scope.row.nextGenerateTime) }}</template></el-table-column>
-        <el-table-column label="操作" width="215" fixed="right"><template #default="scope">
-          <el-button v-if="auth.can('inspection:plan:manage')" link :loading="formLoading&&editingId===scope.row.id" @click="openEdit(scope.row)">编辑</el-button>
-          <el-button v-if="auth.can('inspection:plan:manage')&&scope.row.status==='ENABLED'" link type="primary" :loading="generatingId===scope.row.id" @click="generateTask(scope.row)">生成巡检任务</el-button>
-        </template></el-table-column>
+        <el-table-column label="计划信息" min-width="190">
+          <template #default="scope">
+            <div class="plan-cell">
+              <strong>{{ scope.row.planName }}</strong>
+              <span class="muted-code">{{ scope.row.planCode }}</span>
+            </div>
+          </template>
+        </el-table-column>
+        <el-table-column label="检查对象（设备 / 模板）" min-width="260">
+          <template #default="scope">
+            <div class="target-cell">
+              <span class="device-target">{{ deviceNames[scope.row.deviceId] || '设备加载中' }}</span>
+              <span class="template-target">{{ templateNames[scope.row.templateId] || '模板加载中' }}</span>
+            </div>
+          </template>
+        </el-table-column>
+        <el-table-column label="执行周期与规则" min-width="170">
+          <template #default="scope">
+            <div>
+              <el-tag size="small" type="info">{{ scheduleRuleText(scope.row) }}</el-tag>
+              <div class="rule-hint">{{ executionPeriodText(scope.row) }}</div>
+            </div>
+          </template>
+        </el-table-column>
+        <el-table-column label="巡检责任人" min-width="160">
+          <template #default="scope">{{ inspectorNames[scope.row.assigneeUserId] || '人员信息加载中' }}</template>
+        </el-table-column>
+        <el-table-column label="计划状态" width="95">
+          <template #default="scope">
+            <el-tag :type="scope.row.status==='ENABLED'?'success':'info'">
+              {{ displayValue(scope.row.status) }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="下次执行" min-width="140">
+          <template #default="scope">
+            <span :class="{ 'highlight-time': scope.row.nextGenerateTime && scope.row.nextGenerateTime.includes(localDate()) }">
+              {{ friendlyTime(scope.row.nextGenerateTime) }}
+            </span>
+          </template>
+        </el-table-column>
+        <el-table-column label="核心操作" width="215" fixed="right">
+          <template #default="scope">
+            <el-button v-if="auth.can('inspection:plan:manage')" link :loading="formLoading&&editingId===scope.row.id" @click="openEdit(scope.row)">编辑</el-button>
+            <el-button v-if="auth.can('inspection:plan:manage')&&scope.row.status==='ENABLED'" link type="primary" :loading="generatingId===scope.row.id" @click="generateTask(scope.row)">生成巡检任务</el-button>
+          </template>
+        </el-table-column>
       </el-table>
       <el-empty v-if="!loading&&!errorMessage&&!rows.length" description="暂无符合条件的巡检计划"><el-button v-if="auth.can('inspection:plan:manage')" type="primary" @click="openCreate">创建第一个计划</el-button></el-empty>
       <el-pagination v-if="!errorMessage&&total>pageSize" v-model:current-page="page" layout="prev, pager, next, total" :page-size="pageSize" :total="total" @current-change="load" />
@@ -311,5 +372,5 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
-.inspection-page{display:flex;flex-direction:column;gap:16px}.plan-form{margin-top:18px}.plan-form :deep(.el-select),.plan-form :deep(.el-date-editor){width:100%}.inspection-page :deep(.el-pagination){justify-content:flex-end;margin-top:18px}.filter-card :deep(.el-select){width:230px}
+.inspection-page{display:flex;flex-direction:column;gap:16px}.plan-cell{display:flex;flex-direction:column;gap:2px}.muted-code{color:#64748b;font-size:12px}.target-cell{display:flex;flex-direction:column;gap:3px}.device-target{font-weight:600;color:#1e293b}.template-target{color:#64748b;font-size:12px}.rule-hint{font-size:11px;color:#64748b;margin-top:2px}.highlight-time{color:#0284c7;font-weight:600}.plan-form{margin-top:18px}.plan-form :deep(.el-select),.plan-form :deep(.el-date-editor){width:100%}.inspection-page :deep(.el-pagination){justify-content:flex-end;margin-top:18px}.filter-card :deep(.el-select){width:230px}
 </style>

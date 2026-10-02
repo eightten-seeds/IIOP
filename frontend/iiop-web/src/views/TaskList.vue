@@ -122,16 +122,36 @@ onMounted(async () => {
       <el-table v-else v-loading="loading" :data="rows" row-key="id">
         <el-table-column prop="taskCode" label="任务编号" min-width="170" />
         <el-table-column label="设备" min-width="210"><template #default="scope">{{ deviceNames[scope.row.deviceId] || '设备信息加载中' }}</template></el-table-column>
-        <el-table-column label="巡检人员" min-width="170"><template #default="scope">{{ assigneeNames[scope.row.assigneeUserId] || '巡检人员' }}</template></el-table-column>
+        <el-table-column label="巡检人员" min-width="170">
+          <template #default="scope">
+            <span>{{ assigneeNames[scope.row.assigneeUserId] || '巡检人员' }}</span>
+            <el-tag v-if="auth.currentUser?.id === scope.row.assigneeUserId" size="small" type="success" effect="plain" style="margin-left: 6px">我的任务</el-tag>
+          </template>
+        </el-table-column>
         <el-table-column label="任务状态" width="105"><template #default="scope"><el-tag :type="taskTag(scope.row.taskStatus)">{{ taskStatusLabel(scope.row.taskStatus) }}</el-tag></template></el-table-column>
-        <el-table-column label="结果状态" width="100"><template #default="scope"><el-tag :type="resultTag(scope.row.resultStatus)" effect="plain">{{ displayValue(scope.row.resultStatus) }}</el-tag></template></el-table-column>
+        <el-table-column label="检查结果" width="110">
+          <template #default="scope">
+            <el-tag :type="resultTag(scope.row.resultStatus)" :effect="scope.row.resultStatus==='ABNORMAL'?'dark':'plain'">
+              {{ scope.row.resultStatus === 'ABNORMAL' ? '发现异常' : displayValue(scope.row.resultStatus) }}
+            </el-tag>
+          </template>
+        </el-table-column>
         <el-table-column label="计划开始" min-width="145"><template #default="scope">{{ dateTime(scope.row.scheduledStartTime) }}</template></el-table-column>
         <el-table-column label="计划结束" min-width="145"><template #default="scope">{{ dateTime(scope.row.scheduledEndTime) }}</template></el-table-column>
         <el-table-column label="完成进度" width="130"><template #default="scope"><el-progress :percentage="Number(scope.row.completionRate || 0)" :stroke-width="8" /></template></el-table-column>
         <el-table-column label="逾期" width="80"><template #default="scope"><el-tag v-if="scope.row.overdueFlag===1" type="danger">已逾期</el-tag><span v-else>-</span></template></el-table-column>
-        <el-table-column label="操作" width="100" fixed="right"><template #default="scope"><el-button link type="primary" @click="router.push(`/inspection/tasks/${scope.row.id}`)">查看详情</el-button></template></el-table-column>
+        <el-table-column label="操作" width="110" fixed="right">
+          <template #default="scope">
+            <el-button link type="primary" @click="router.push(`/inspection/tasks/${scope.row.id}`)">
+              {{ (pureInspector() || auth.currentUser?.id === scope.row.assigneeUserId) && (scope.row.taskStatus === 'PENDING' || scope.row.taskStatus === 'IN_PROGRESS') ? '前往执行' : '查看详情' }}
+            </el-button>
+          </template>
+        </el-table-column>
       </el-table>
-      <el-empty v-if="!loading&&!errorMessage&&!rows.length" :description="pureInspector()?'当前没有分配给你的巡检任务':'暂无符合条件的巡检任务'" />
+      <el-empty
+        v-if="!loading&&!errorMessage&&!rows.length"
+        :description="filters.taskStatus==='PENDING'?'当前没有待执行的巡检任务':filters.taskStatus==='IN_PROGRESS'?'当前没有进行中的巡检任务':pureInspector()?'当前没有分配给你的巡检任务':'暂无符合条件的巡检任务'"
+      />
       <el-pagination v-if="!errorMessage&&total>pageSize" v-model:current-page="page" layout="prev, pager, next, total" :page-size="pageSize" :total="total" @current-change="load" />
     </el-card>
   </section>

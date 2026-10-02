@@ -3,6 +3,7 @@ import axios from 'axios';
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
+import { Warning } from '@element-plus/icons-vue';
 import { request } from '../api/request';
 import { useAuthStore } from '../stores/auth';
 import type { Device, UserSummary } from '../types/device';
@@ -33,10 +34,29 @@ const abnormals = computed(() => data.value?.abnormals ?? []);
 const canExecuteIdentity = computed(() => Boolean(task.value && auth.can('inspection:execute') && auth.roles.includes('INSPECTOR') && auth.currentUser?.id === task.value.assigneeUserId));
 const canEdit = computed(() => canExecuteIdentity.value && task.value?.taskStatus === 'IN_PROGRESS');
 const completedCount = computed(() => items.value.filter(item => item.resultStatus !== 'PENDING').length);
+const abnormalCount = computed(() => items.value.filter(item => item.resultStatus === 'ABNORMAL').length);
+const uncompletedCount = computed(() => items.value.filter(item => item.resultStatus === 'PENDING').length);
 const remainingRequired = computed(() => items.value.filter(item => item.requiredFlag === 1 && item.resultStatus === 'PENDING').length);
 const requiredPhotoPending = computed(() => items.value.some(item => item.itemType === 'PHOTO' && item.requiredFlag === 1 && item.resultStatus === 'PENDING'));
 const computedRate = computed(() => items.value.length ? Math.round(completedCount.value * 100 / items.value.length) : 0);
 const hasDirty = computed(() => dirtyIds.value.size > 0);
+
+const cannotCompleteReason = computed(() => {
+  if (task.value?.taskStatus !== 'IN_PROGRESS') {
+    return '当前任务尚未开始或已结束，无法提交完成。';
+  }
+  if (hasDirty.value) {
+    return `存在 ${dirtyIds.value.size} 项已修改但尚未保存的检查项，请先点击“保存本项”。`;
+  }
+  if (remainingRequired.value > 0) {
+    return `仍有 ${remainingRequired.value} 个必填检查项未录入结果，全部必填项完成后方可提交完成。`;
+  }
+  if (requiredPhotoPending.value) {
+    return '包含当前版本无法执行的必填图片检查项，请联系管理员调整。';
+  }
+  return '';
+});
+
 const dateTime = (value: string | null | undefined) => value ? value.replace('T', ' ').slice(0, 19) : '-';
 const taskStatusLabel = (status?: string) => ({ PENDING: '待巡检', IN_PROGRESS: '巡检中', COMPLETED: '已完成', CANCELLED: '已取消' }[status ?? ''] ?? displayValue(status));
 
@@ -209,7 +229,19 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload));
 
 <template>
   <section class="task-detail">
-    <div class="page-head"><div><el-button link @click="router.push('/inspection/tasks')">← 返回任务列表</el-button><h1>巡检任务详情</h1><p>按任务状态完成现场检查、保存结果并上报真实异常。</p></div><div class="head-actions"><el-button v-if="canExecuteIdentity&&task?.taskStatus==='PENDING'" type="primary" :loading="starting" @click="startTask">开始巡检</el-button><el-button v-if="canEdit" type="danger" plain @click="openAbnormal">上报异常</el-button><el-button v-if="canEdit" type="success" :loading="completing" :disabled="remainingRequired>0||hasDirty" @click="completeTask">完成巡检</el-button></div></div>
+    <div class="page-head">
+      <div><el-button link @click="router.push('/inspection/tasks')">← 返回任务列表</el-button><h1>巡检任务详情</h1><p>按任务状态完成现场检查、保存结果并上报真实异常。</p></div>
+      <div class="head-actions">
+        <el-button v-if="canExecuteIdentity&&task?.taskStatus==='PENDING'" type="primary" :loading="starting" @click="startTask">开始巡检</el-button>
+        <el-button v-if="canEdit" type="danger" plain @click="openAbnormal">上报异常</el-button>
+        <el-tooltip v-if="canEdit && cannotCompleteReason" :content="cannotCompleteReason" placement="bottom">
+          <span>
+            <el-button type="success" :disabled="true">完成巡检</el-button>
+          </span>
+        </el-tooltip>
+        <el-button v-else-if="canEdit" type="success" :loading="completing" @click="completeTask">完成巡检</el-button>
+      </div>
+    </div>
     <el-alert v-if="errorMessage" :title="errorMessage" type="error" show-icon :closable="false"><template #default><el-button link type="primary" @click="load">重新加载</el-button></template></el-alert>
     <template v-else>
       <el-card v-loading="loading" shadow="never"><template #header><strong>任务信息</strong></template>
@@ -223,7 +255,28 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload));
       </el-card>
 
       <el-alert v-if="requiredPhotoPending" title="该任务包含第一版无法执行的必填图片检查项，请联系管理员处理模板/任务数据。" type="error" show-icon :closable="false" />
-      <el-card shadow="never"><template #header><div class="section-head"><div><strong>检查项填写</strong><p>已完成 {{ completedCount }} / {{ items.length }}，剩余 {{ remainingRequired }} 个必填项<span v-if="hasDirty">；{{ dirtyIds.size }} 项修改尚未保存</span></p></div></div></template>
+      <el-card shadow="never">
+        <template #header>
+          <div class="section-head">
+            <div>
+              <strong>检查项填写</strong>
+              <div class="execution-stats-row">
+                <el-tag type="info">已完成：{{ completedCount }} / {{ items.length }} 项</el-tag>
+                <el-tag :type="abnormalCount > 0 ? 'danger' : 'success'" :effect="abnormalCount > 0 ? 'dark' : 'plain'">
+                  发现异常：{{ abnormalCount }} 项
+                </el-tag>
+                <el-tag :type="uncompletedCount > 0 ? 'warning' : 'info'" effect="plain">
+                  待完成：{{ uncompletedCount }} 项
+                </el-tag>
+                <span v-if="hasDirty" class="dirty-badge">（存在 {{ dirtyIds.size }} 项未保存的修改）</span>
+              </div>
+            </div>
+            <div v-if="canEdit && cannotCompleteReason" class="completion-reason-callout">
+              <el-icon><Warning /></el-icon>
+              <span>{{ cannotCompleteReason }}</span>
+            </div>
+          </div>
+        </template>
         <el-progress :percentage="computedRate" :status="computedRate===100?'success':undefined" />
         <el-empty v-if="!items.length" description="该任务没有检查项" />
         <div v-for="item in items" :key="item.id" class="item-card" :class="{dirty:dirtyIds.has(item.id)}">
@@ -258,5 +311,5 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload));
 </template>
 
 <style scoped>
-.task-detail{display:flex;flex-direction:column;gap:16px}.head-actions,.section-head,.item-title{display:flex;align-items:center;justify-content:space-between;gap:12px}.section-head p{margin:6px 0 0;color:#667085}.item-card{margin-top:16px;padding:18px;border:1px solid #e4e7ed;border-radius:10px;background:#fafcff}.item-card.dirty{border-color:#e6a23c;background:#fffaf0}.item-title{margin-bottom:14px}.item-title>div{display:flex;align-items:center;gap:8px}.item-title span{color:#667085;font-size:13px}.result-form{margin-top:14px;max-width:820px}.result-form :deep(.el-input-number),.abnormal-form :deep(.el-select){width:100%}.item-card :deep(.el-alert),.task-detail>.el-alert{margin-top:12px}
+.task-detail{display:flex;flex-direction:column;gap:16px}.head-actions,.section-head,.item-title{display:flex;align-items:center;justify-content:space-between;gap:12px}.execution-stats-row{display:flex;align-items:center;gap:10px;margin-top:8px;flex-wrap:wrap}.completion-reason-callout{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:6px;background:#fef3c7;color:#b45309;font-size:12px;max-width:480px}.dirty-badge{color:#d97706;font-size:12px;font-weight:600}.section-head p{margin:6px 0 0;color:#667085}.item-card{margin-top:16px;padding:18px;border:1px solid #e4e7ed;border-radius:10px;background:#fafcff}.item-card.dirty{border-color:#e6a23c;background:#fffaf0}.item-title{margin-bottom:14px}.item-title>div{display:flex;align-items:center;gap:8px}.item-title span{color:#667085;font-size:13px}.result-form{margin-top:14px;max-width:820px}.result-form :deep(.el-input-number),.abnormal-form :deep(.el-select){width:100%}.item-card :deep(.el-alert),.task-detail>.el-alert{margin-top:12px}
 </style>

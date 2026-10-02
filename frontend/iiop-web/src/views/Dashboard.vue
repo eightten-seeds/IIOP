@@ -121,6 +121,34 @@ const opsStatus = computed<RegionStatus>(() => {
   return statuses.every((status) => status === 'empty') ? 'empty' : 'success';
 });
 
+const roleTitle = computed(() => {
+  if (isSuperAdmin.value) return '超级管理员工作台';
+  if (isAdmin.value) return '业务运维管理工作台';
+  if (isInspector.value) return '现场巡检工作台';
+  if (isMaintainer.value) return '现场维修工作台';
+  return '工业智能运维工作台';
+});
+
+const todayGuidance = computed(() => {
+  if (isInspector.value) {
+    if (taskMetrics.value.pending > 0) return `今天有 ${taskMetrics.value.pending} 项待执行巡检任务，请尽快前往现场开展检查。`;
+    if (taskMetrics.value.inProgress > 0) return `当前有 ${taskMetrics.value.inProgress} 项巡检任务正在进行中，请及时录入检查数据并提交。`;
+    return '今日巡检任务均已处理完毕，现场设备运行状态良好。';
+  }
+  if (isMaintainer.value) {
+    if (workOrderMetrics.value.assigned > 0) return `今天有 ${workOrderMetrics.value.assigned} 单已分派给您的待维修工单，请及时开工。`;
+    if (workOrderMetrics.value.processing > 0) return `当前有 ${workOrderMetrics.value.processing} 单正在维修中，完成维修后请如实提交处理结果。`;
+    return '暂无待处理维修工单，设备维护平稳受控。';
+  }
+  const pendingItems: string[] = [];
+  if (taskMetrics.value.pending > 0) pendingItems.push(`${taskMetrics.value.pending} 项待执行巡检`);
+  if (defectMetrics.value.open > 0) pendingItems.push(`${defectMetrics.value.open} 起待确认缺陷`);
+  if (workOrderMetrics.value.waitingAcceptance > 0) pendingItems.push(`${workOrderMetrics.value.waitingAcceptance} 单待验收工单`);
+  if (aiMetrics.value.pending > 0) pendingItems.push(`${aiMetrics.value.pending} 项 AI 待确认诊断`);
+  if (pendingItems.length) return `今日重点协同：当前有 ${pendingItems.join('、')}，请协同各岗位推进闭环。`;
+  return '当前全流程闭环运转平稳，无积压待办事项。';
+});
+
 async function loadDeviceRegion() {
   if (!canDevice.value) return;
   deviceStatus.value = 'loading';
@@ -247,10 +275,10 @@ function renderStatusChart() {
 
   const statusMap = overview.value.byStatus || {};
   const data = [
-    { name: '在线 (ONLINE)', value: Number(statusMap.ONLINE || 0), itemStyle: { color: '#10b981' } },
-    { name: '离线 (OFFLINE)', value: Number(statusMap.OFFLINE || 0), itemStyle: { color: '#94a3b8' } },
-    { name: '故障 (FAULT)', value: Number(statusMap.FAULT || 0), itemStyle: { color: '#ef4444' } },
-    { name: '维护中 (MAINTENANCE)', value: Number(statusMap.MAINTENANCE || 0), itemStyle: { color: '#f59e0b' } }
+    { name: '在线', value: Number(statusMap.ONLINE || 0), itemStyle: { color: '#10b981' } },
+    { name: '离线', value: Number(statusMap.OFFLINE || 0), itemStyle: { color: '#94a3b8' } },
+    { name: '故障', value: Number(statusMap.FAULT || 0), itemStyle: { color: '#ef4444' } },
+    { name: '维护中', value: Number(statusMap.MAINTENANCE || 0), itemStyle: { color: '#f59e0b' } }
   ].filter((item) => item.value > 0);
 
   const hasData = data.length > 0;
@@ -433,11 +461,15 @@ onUnmounted(() => {
 
 <template>
   <section class="dashboard-page">
-    <!-- Page Header -->
-    <div class="page-head">
+    <!-- Page Header / Workbench Hero -->
+    <div class="page-head workbench-head">
       <div>
-        <h1>工业设备智能巡检运维总览</h1>
-        <p>基于实时感知与双端协同，掌握设备运行、巡检执行与缺陷修复全闭环。</p>
+        <div class="workbench-badge">
+          <span class="status-pulse-dot"></span>
+          <span class="workbench-role-name">{{ roleTitle }}</span>
+        </div>
+        <h1>工业设备智能运维总览</h1>
+        <p class="workbench-guidance">{{ todayGuidance }}</p>
       </div>
       <div class="head-actions">
         <el-button v-if="canDevice" :icon="View" @click="router.push('/devices/scene')">设备空间三维视图</el-button>
@@ -445,118 +477,108 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <!-- Top KPI Cards -->
-    <el-row :gutter="16" class="kpi-row" v-loading="loading">
-      <el-col v-if="canDevice" :xs="24" :sm="12" :lg="6">
-        <el-card v-loading="deviceStatus === 'loading'" shadow="never" class="kpi-card" @click="deviceStatus !== 'error' && router.push('/devices')">
-          <div class="kpi-icon-box bg-blue">
-            <el-icon :size="24"><Cpu /></el-icon>
+    <!-- Top KPI Cards Grid -->
+    <div class="kpi-grid" v-loading="loading">
+      <el-card v-if="canDevice" v-loading="deviceStatus === 'loading'" shadow="never" class="kpi-card" @click="deviceStatus !== 'error' && router.push('/devices')">
+        <div class="kpi-icon-box bg-blue">
+          <el-icon :size="24"><Cpu /></el-icon>
+        </div>
+        <div v-if="deviceStatus === 'error'" class="region-error compact" @click.stop>
+          <span>数据加载失败</span>
+          <el-button link type="primary" @click="retryRegion('device')">重试</el-button>
+        </div>
+        <div v-else class="kpi-info">
+          <span class="kpi-label">设备总台数</span>
+          <div class="kpi-value-row">
+            <span class="kpi-value">{{ overview.deviceTotal }}</span>
+            <span class="kpi-unit">台</span>
           </div>
-          <div v-if="deviceStatus === 'error'" class="region-error compact" @click.stop>
-            <span>数据加载失败</span>
-            <el-button link type="primary" @click="retryRegion('device')">重试</el-button>
-          </div>
-          <div v-else class="kpi-info">
-            <span class="kpi-label">设备总台数</span>
-            <div class="kpi-value-row">
-              <span class="kpi-value">{{ overview.deviceTotal }}</span>
-              <span class="kpi-unit">台</span>
-            </div>
-            <span class="kpi-sub">
-              在线 {{ overview.byStatus['ONLINE'] || 0 }} · 故障 {{ overview.byStatus['FAULT'] || 0 }}
-            </span>
-          </div>
-        </el-card>
-      </el-col>
+          <span class="kpi-sub">
+            在线 {{ overview.byStatus['ONLINE'] || 0 }} · 故障 {{ overview.byStatus['FAULT'] || 0 }}
+          </span>
+        </div>
+      </el-card>
 
-      <el-col v-if="canInspection" :xs="24" :sm="12" :lg="6">
-        <el-card v-loading="inspectionStatus === 'loading'" shadow="never" class="kpi-card" @click="inspectionStatus !== 'error' && router.push('/inspection/tasks')">
-          <div class="kpi-icon-box bg-amber">
-            <el-icon :size="24"><DocumentChecked /></el-icon>
+      <el-card v-if="canInspection" v-loading="inspectionStatus === 'loading'" shadow="never" class="kpi-card" @click="inspectionStatus !== 'error' && router.push('/inspection/tasks')">
+        <div class="kpi-icon-box bg-amber">
+          <el-icon :size="24"><DocumentChecked /></el-icon>
+        </div>
+        <div v-if="inspectionStatus === 'error'" class="region-error compact" @click.stop>
+          <span>数据加载失败</span>
+          <el-button link type="primary" @click="retryRegion('inspection')">重试</el-button>
+        </div>
+        <div v-else class="kpi-info">
+          <span class="kpi-label">{{ isInspector ? '我的待执行任务' : '待执行巡检' }}</span>
+          <div class="kpi-value-row">
+            <span class="kpi-value text-amber">{{ taskMetrics.pending }}</span>
+            <span class="kpi-unit">项</span>
           </div>
-          <div v-if="inspectionStatus === 'error'" class="region-error compact" @click.stop>
-            <span>数据加载失败</span>
-            <el-button link type="primary" @click="retryRegion('inspection')">重试</el-button>
-          </div>
-          <div v-else class="kpi-info">
-            <span class="kpi-label">{{ isInspector ? '我的待执行任务' : '待执行巡检' }}</span>
-            <div class="kpi-value-row">
-              <span class="kpi-value text-amber">{{ taskMetrics.pending }}</span>
-              <span class="kpi-unit">项</span>
-            </div>
-            <span class="kpi-sub">
-              进行中 {{ taskMetrics.inProgress }} · 已完成 {{ taskMetrics.completed }}
-            </span>
-          </div>
-        </el-card>
-      </el-col>
+          <span class="kpi-sub">
+            进行中 {{ taskMetrics.inProgress }} · 已完成 {{ taskMetrics.completed }}
+          </span>
+        </div>
+      </el-card>
 
-      <el-col v-if="canMaintenance" :xs="24" :sm="12" :lg="6">
-        <el-card v-loading="maintenanceStatus === 'loading'" shadow="never" class="kpi-card" @click="maintenanceStatus !== 'error' && router.push('/maintenance/defects')">
-          <div class="kpi-icon-box bg-red">
-            <el-icon :size="24"><Warning /></el-icon>
+      <el-card v-if="canMaintenance" v-loading="maintenanceStatus === 'loading'" shadow="never" class="kpi-card" @click="maintenanceStatus !== 'error' && router.push('/maintenance/defects')">
+        <div class="kpi-icon-box bg-red">
+          <el-icon :size="24"><Warning /></el-icon>
+        </div>
+        <div v-if="maintenanceStatus === 'error'" class="region-error compact" @click.stop>
+          <span>数据加载失败</span>
+          <el-button link type="primary" @click="retryRegion('maintenance')">重试</el-button>
+        </div>
+        <div v-else class="kpi-info">
+          <span class="kpi-label">待处理缺陷</span>
+          <div class="kpi-value-row">
+            <span class="kpi-value text-red">{{ defectMetrics.open }}</span>
+            <span class="kpi-unit">起</span>
           </div>
-          <div v-if="maintenanceStatus === 'error'" class="region-error compact" @click.stop>
-            <span>数据加载失败</span>
-            <el-button link type="primary" @click="retryRegion('maintenance')">重试</el-button>
-          </div>
-          <div v-else class="kpi-info">
-            <span class="kpi-label">待处理缺陷</span>
-            <div class="kpi-value-row">
-              <span class="kpi-value text-red">{{ defectMetrics.open }}</span>
-              <span class="kpi-unit">起</span>
-            </div>
-            <span class="kpi-sub">
-              已确认 {{ defectMetrics.confirmed }} · 修复中 {{ defectMetrics.processing }}
-            </span>
-          </div>
-        </el-card>
-      </el-col>
+          <span class="kpi-sub">
+            已确认 {{ defectMetrics.confirmed }} · 修复中 {{ defectMetrics.processing }}
+          </span>
+        </div>
+      </el-card>
 
-      <el-col v-if="canMaintenance" :xs="24" :sm="12" :lg="6">
-        <el-card v-loading="maintenanceStatus === 'loading'" shadow="never" class="kpi-card" @click="maintenanceStatus !== 'error' && router.push('/maintenance/work-orders')">
-          <div class="kpi-icon-box bg-purple">
-            <el-icon :size="24"><Tools /></el-icon>
-          </div>
-          <div v-if="maintenanceStatus === 'error'" class="region-error compact" @click.stop>
-            <span>数据加载失败</span>
-            <el-button link type="primary" @click="retryRegion('maintenance')">重试</el-button>
-          </div>
-          <div v-else class="kpi-info">
-            <span class="kpi-label">{{ isMaintainer ? '我的待处理工单' : '待验收工单' }}</span>
-            <div class="kpi-value-row">
-              <span class="kpi-value text-purple">
-                {{ isMaintainer ? workOrderMetrics.assigned : workOrderMetrics.waitingAcceptance }}
-              </span>
-              <span class="kpi-unit">单</span>
-            </div>
-            <span class="kpi-sub">
-              待分派 {{ workOrderMetrics.pending }} · 维修中 {{ workOrderMetrics.processing }}
+      <el-card v-if="canMaintenance" v-loading="maintenanceStatus === 'loading'" shadow="never" class="kpi-card" @click="maintenanceStatus !== 'error' && router.push('/maintenance/work-orders')">
+        <div class="kpi-icon-box bg-purple">
+          <el-icon :size="24"><Tools /></el-icon>
+        </div>
+        <div v-if="maintenanceStatus === 'error'" class="region-error compact" @click.stop>
+          <span>数据加载失败</span>
+          <el-button link type="primary" @click="retryRegion('maintenance')">重试</el-button>
+        </div>
+        <div v-else class="kpi-info">
+          <span class="kpi-label">{{ isMaintainer ? '我的待处理工单' : '待验收工单' }}</span>
+          <div class="kpi-value-row">
+            <span class="kpi-value text-purple">
+              {{ isMaintainer ? workOrderMetrics.assigned : workOrderMetrics.waitingAcceptance }}
             </span>
+            <span class="kpi-unit">单</span>
           </div>
-        </el-card>
-      </el-col>
+          <span class="kpi-sub">
+            待分派 {{ workOrderMetrics.pending }} · 维修中 {{ workOrderMetrics.processing }}
+          </span>
+        </div>
+      </el-card>
 
-      <el-col v-if="canAi" :xs="24" :sm="12" :lg="6">
-        <el-card v-loading="aiStatus === 'loading'" shadow="never" class="kpi-card" @click="aiStatus !== 'error' && router.push('/ai/diagnoses')">
-          <div class="kpi-icon-box bg-green">
-            <el-icon :size="24"><DataAnalysis /></el-icon>
+      <el-card v-if="canAi" v-loading="aiStatus === 'loading'" shadow="never" class="kpi-card" @click="aiStatus !== 'error' && router.push('/ai/diagnoses')">
+        <div class="kpi-icon-box bg-green">
+          <el-icon :size="24"><DataAnalysis /></el-icon>
+        </div>
+        <div v-if="aiStatus === 'error'" class="region-error compact" @click.stop>
+          <span>数据加载失败</span>
+          <el-button link type="primary" @click="retryRegion('ai')">重试</el-button>
+        </div>
+        <div v-else class="kpi-info">
+          <span class="kpi-label">AI 待人工确认</span>
+          <div class="kpi-value-row">
+            <span class="kpi-value text-green">{{ aiMetrics.pending }}</span>
+            <span class="kpi-unit">项</span>
           </div>
-          <div v-if="aiStatus === 'error'" class="region-error compact" @click.stop>
-            <span>数据加载失败</span>
-            <el-button link type="primary" @click="retryRegion('ai')">重试</el-button>
-          </div>
-          <div v-else class="kpi-info">
-            <span class="kpi-label">AI 待人工确认</span>
-            <div class="kpi-value-row">
-              <span class="kpi-value text-green">{{ aiMetrics.pending }}</span>
-              <span class="kpi-unit">项</span>
-            </div>
-            <span class="kpi-sub">严重风险 {{ aiMetrics.criticalHigh }} 项</span>
-          </div>
-        </el-card>
-      </el-col>
-    </el-row>
+          <span class="kpi-sub">严重风险 {{ aiMetrics.criticalHigh }} 项</span>
+        </div>
+      </el-card>
+    </div>
 
     <!-- 3 ECharts Visual Panels -->
     <el-row :gutter="16" class="charts-row" v-loading="loading">
@@ -802,13 +824,44 @@ onUnmounted(() => {
   gap: 16px;
 }
 
+.workbench-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px;
+  background: rgba(36, 169, 187, 0.1);
+  border: 1px solid rgba(36, 169, 187, 0.25);
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #1769aa;
+  margin-bottom: 6px;
+}
+
+.status-pulse-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #10b981;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2);
+}
+
+.workbench-guidance {
+  margin: 6px 0 0;
+  color: #475569;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
 .head-actions {
   display: flex;
   gap: 10px;
 }
 
-.kpi-row {
-  margin-bottom: 0;
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
 }
 
 .kpi-card {

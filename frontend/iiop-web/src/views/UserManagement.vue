@@ -523,7 +523,7 @@ onBeforeUnmount(() => {
     </el-dialog>
 
     <el-dialog v-model="editVisible" :title="`编辑用户：${editUser?.username||''}`" width="600px" :close-on-click-modal="!saving" :before-close="beforeCloseEdit">
-      <el-alert title="后端当前不返回手机号、邮箱和头像；仅实际修改的字段会提交，未修改的空白字段保持原值。" type="info" :closable="false" show-icon />
+      <el-alert title="为保护人员隐私，敏感联系信息不作明文回显。仅填写并修改的项目会在提交后更新，留空项将保持原设置。" type="info" :closable="false" show-icon />
       <el-form label-width="100px" class="dialog-form">
         <el-form-item label="姓名"><el-input v-model="editForm.realName" @input="markEditTouched('realName')" /></el-form-item>
         <el-form-item label="手机号"><el-input v-model="editForm.phone" placeholder="留空且不修改则保持原值" @input="markEditTouched('phone')" /></el-form-item>
@@ -540,7 +540,7 @@ onBeforeUnmount(() => {
           <el-checkbox :value="role.id" :disabled="roleDisabled(role)">{{ displayValue(role.roleCode) }}（{{ role.roleCode }}）</el-checkbox>
         </el-tooltip>
       </el-checkbox-group>
-      <el-alert title="保存时提交当前完整岗位集合；已有岗位已从服务端加载并回显。" type="info" :closable="false" show-icon />
+      <el-alert title="可为一个用户分配多个岗位角色；保存后新配置将立即生效。" type="info" :closable="false" show-icon />
       <template #footer><el-button :disabled="saving" @click="beforeCloseRole()">取消</el-button><el-button type="primary" :loading="saving" :disabled="saving" @click="saveRoles">保存角色</el-button></template>
     </el-dialog>
 

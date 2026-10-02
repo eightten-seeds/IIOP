@@ -71,7 +71,8 @@ request.interceptors.response.use(
     }
     const backendMessage = error.response?.data?.message || error.response?.data?.msg;
     if (status === 403) {
-      notify('error', backendMessage ? `当前账号无权执行此操作：${backendMessage}` : '当前账号无权执行此操作');
+      const isTech = backendMessage && (backendMessage.includes('403') || backendMessage.includes('Request') || backendMessage.includes('Axios') || backendMessage.includes('Forbidden'));
+      notify('error', backendMessage && !isTech ? `无权限执行该操作：${backendMessage}` : '无权限执行该操作');
     } else if (status === 409) {
       notify('warning', backendMessage || '业务状态已变化，请刷新后重试');
     } else if (status === 429) {

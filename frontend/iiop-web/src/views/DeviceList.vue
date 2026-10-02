@@ -258,21 +258,43 @@ onBeforeUnmount(() => {
     <el-card shadow="never">
       <el-alert v-if="errorMessage" :title="errorMessage" type="error" show-icon :closable="false"><template #default><el-button link type="primary" @click="load">重新加载</el-button></template></el-alert>
       <el-table v-else v-loading="loading" :data="rows" row-key="id">
-        <el-table-column prop="deviceCode" label="设备编码" min-width="145" />
-        <el-table-column prop="deviceName" label="设备名称" min-width="170" />
-        <el-table-column label="分类" min-width="140"><template #default="scope">{{ categoryNames[scope.row.categoryId] || '未知分类' }}</template></el-table-column>
-        <el-table-column prop="model" label="型号" min-width="130"><template #default="scope">{{ scope.row.model || '-' }}</template></el-table-column>
-        <el-table-column prop="installLocation" label="安装位置" min-width="180"><template #default="scope">{{ scope.row.installLocation || '-' }}</template></el-table-column>
-        <el-table-column label="状态" width="105"><template #default="scope"><el-tag :type="statusTag(scope.row.status)">{{ displayValue(scope.row.status) }}</el-tag></template></el-table-column>
-        <el-table-column label="风险" width="110"><template #default="scope"><el-tag :type="riskTag(scope.row.riskLevel)" effect="plain">{{ displayValue(scope.row.riskLevel) }}</el-tag></template></el-table-column>
-        <el-table-column label="负责人" min-width="160"><template #default="scope">{{ responsibleLabel(scope.row.responsibleUserId) }}</template></el-table-column>
-        <el-table-column label="操作" width="210" fixed="right"><template #default="scope">
-          <el-button link @click="router.push(`/devices/${scope.row.id}`)">查看详情</el-button>
+        <el-table-column label="设备信息" min-width="210">
+          <template #default="scope">
+            <div class="device-identity">
+              <strong class="device-name">{{ scope.row.deviceName }}</strong>
+              <span class="device-code">{{ scope.row.deviceCode }}</span>
+            </div>
+          </template>
+        </el-table-column>
+        <el-table-column label="分类" min-width="130"><template #default="scope">{{ categoryNames[scope.row.categoryId] || '未知分类' }}</template></el-table-column>
+        <el-table-column prop="model" label="型号" min-width="120"><template #default="scope">{{ scope.row.model || '-' }}</template></el-table-column>
+        <el-table-column label="区域与位置" min-width="180">
+          <template #default="scope">
+            <span>{{ [scope.row.workshop, scope.row.installLocation].filter(Boolean).join(' · ') || '-' }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="运行状态" width="115">
+          <template #default="scope">
+            <el-tag :type="statusTag(scope.row.status)" :effect="scope.row.status==='FAULT'?'dark':'light'">
+              {{ displayValue(scope.row.status) }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="安全风险" width="115">
+          <template #default="scope">
+            <el-tag :type="riskTag(scope.row.riskLevel)" :effect="scope.row.riskLevel==='CRITICAL'?'dark':'plain'">
+              {{ displayValue(scope.row.riskLevel) }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="责任人" min-width="160"><template #default="scope">{{ responsibleLabel(scope.row.responsibleUserId) }}</template></el-table-column>
+        <el-table-column label="核心操作" width="220" fixed="right"><template #default="scope">
+          <el-button link type="primary" @click="router.push(`/devices/${scope.row.id}`)">查看详情</el-button>
           <el-button v-if="auth.can('device:update')" link :loading="formLoading && editingId===scope.row.id" @click="openEdit(scope.row)">编辑</el-button>
           <el-button v-if="auth.can('device:delete')" link type="danger" :loading="deletingId===scope.row.id" @click="deleteDevice(scope.row)">删除</el-button>
         </template></el-table-column>
       </el-table>
-      <el-empty v-if="!loading&&!errorMessage&&!rows.length" description="暂无符合条件的设备"><el-button v-if="auth.can('device:create')" type="primary" @click="openCreate">新增第一台设备</el-button></el-empty>
+      <el-empty v-if="!loading&&!errorMessage&&!rows.length" description="暂无符合条件的设备档案"><el-button v-if="auth.can('device:create')" type="primary" @click="openCreate">新增第一台设备</el-button></el-empty>
       <el-pagination v-if="!errorMessage&&total>pageSize" v-model:current-page="page" layout="prev, pager, next, total" :page-size="pageSize" :total="total" @current-change="load" />
     </el-card>
 
@@ -308,5 +330,5 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
-.device-page{display:flex;flex-direction:column;gap:16px}.device-form :deep(.el-select),.device-form :deep(.el-tree-select),.device-form :deep(.el-date-editor){width:100%}.device-form :deep(.el-input-number){width:100%}.device-form :deep(.el-collapse){border-top:0}.device-form :deep(.el-collapse-item__header){font-weight:600;color:#344054}
+.device-page{display:flex;flex-direction:column;gap:16px}.device-identity{display:flex;flex-direction:column;gap:2px}.device-name{color:#1e293b;font-size:14px;font-weight:600}.device-code{color:#64748b;font-size:12px}.device-form :deep(.el-select),.device-form :deep(.el-tree-select),.device-form :deep(.el-date-editor){width:100%}.device-form :deep(.el-input-number){width:100%}.device-form :deep(.el-collapse){border-top:0}.device-form :deep(.el-collapse-item__header){font-weight:600;color:#344054}
 </style>
