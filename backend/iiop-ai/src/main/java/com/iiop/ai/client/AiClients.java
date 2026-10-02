@@ -18,6 +18,10 @@ public final class AiClients {private AiClients(){}
   @GetMapping("/internal/maintenance/devices/{id}/history") Result<Map<String,Object>> history(@PathVariable Long id);
   @GetMapping("/internal/maintenance/alarms/{id}") Result<AlarmDto> alarm(@PathVariable Long id);
  }
+ @FeignClient(name="iiop-auth") public interface AuthClient {
+  @PostMapping("/internal/auth/websocket-events") Result<Void> websocketEvent(@RequestBody WebSocketEventRequest request);
+ }
  public record AbnormalDto(Long id,Long taskId,Long deviceId,Long assigneeUserId,String severity,String title,String description){}
  public record AlarmDto(Long id,Long deviceId,String alarmLevel,String alarmTitle,String alarmContent){}
+ public record WebSocketEventRequest(Long recipientUserId,String eventType,String title,String content,String bizType,Long bizId){}
 }

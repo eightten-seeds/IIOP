@@ -6,6 +6,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.iiop.auth.domain.entity.SysNotification;
 import com.iiop.auth.domain.dto.NotificationView;
 import com.iiop.auth.domain.dto.NotificationCreateRequest;
+import com.iiop.auth.domain.dto.WebSocketEventRequest;
 import com.iiop.auth.mapper.SysNotificationMapper;
 import com.iiop.common.api.ErrorCode;
 import com.iiop.common.api.PageResult;
@@ -27,6 +28,10 @@ public class NotificationService {
         SysNotification n=new SysNotification(); n.setRecipientUserId(request.recipientUserId()); n.setNotificationType(request.notificationType());
         n.setTitle(request.title()); n.setContent(request.content()); n.setBizType(request.bizType()); n.setBizId(request.bizId()); n.setReadStatus("UNREAD");
         mapper.insert(n); NotificationView view=view(n); webSocketHandler.push(request.recipientUserId(),view); return view;
+    }
+    public void pushEvent(WebSocketEventRequest request){
+        NotificationView event=new NotificationView("event-"+System.nanoTime(),request.eventType(),request.title(),request.content(),request.bizType(),String.valueOf(request.bizId()),"EPHEMERAL",null,LocalDateTime.now());
+        webSocketHandler.push(request.recipientUserId(),event);
     }
     private NotificationView view(SysNotification n){return new NotificationView(String.valueOf(n.getId()),n.getNotificationType(),n.getTitle(),n.getContent(),n.getBizType(),n.getBizId()==null?null:String.valueOf(n.getBizId()),n.getReadStatus(),n.getReadTime(),n.getCreatedAt());}
 }

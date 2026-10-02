@@ -15,6 +15,8 @@ export interface NotificationMessage {
 }
 
 type MessageListener = (msg: NotificationMessage) => void;
+export type ConnectionState = 'connecting' | 'connected' | 'disconnected';
+type StateListener = (state: ConnectionState) => void;
 
 class NotificationSocketService {
   private socket: WebSocket | null = null;
@@ -23,12 +25,20 @@ class NotificationSocketService {
   private intentionalClose = false;
   private listeners: Set<MessageListener> = new Set();
   private currentToken: string | null = null;
+  private state: ConnectionState = 'disconnected';
+  private stateListeners: Set<StateListener> = new Set();
 
   public subscribe(listener: MessageListener): () => void {
     this.listeners.add(listener);
     return () => {
       this.listeners.delete(listener);
     };
+  }
+
+  public subscribeState(listener: StateListener): () => void {
+    this.stateListeners.add(listener);
+    listener(this.state);
+    return () => this.stateListeners.delete(listener);
   }
 
   public connect(token: string) {
@@ -38,6 +48,7 @@ class NotificationSocketService {
     }
     this.intentionalClose = false;
     this.currentToken = token;
+    this.setState('connecting');
 
     if (this.socket) {
       try {
@@ -63,6 +74,7 @@ class NotificationSocketService {
 
     this.socket.onopen = () => {
       this.reconnectDelay = 1000;
+      this.setState('connected');
     };
 
     this.socket.onmessage = (event) => {
@@ -80,6 +92,7 @@ class NotificationSocketService {
 
     this.socket.onclose = () => {
       this.socket = null;
+      this.setState('disconnected');
       if (!this.intentionalClose) {
         this.scheduleReconnect();
       }
@@ -89,6 +102,7 @@ class NotificationSocketService {
   public close() {
     this.intentionalClose = true;
     this.currentToken = null;
+    this.setState('disconnected');
     if (this.reconnectTimer) {
       window.clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
@@ -135,7 +149,7 @@ class NotificationSocketService {
 
   private handleMessage(msg: NotificationMessage) {
     const auth = useAuthStore();
-    void auth.refreshUnread();
+    if (msg.readStatus !== 'EPHEMERAL') void auth.refreshUnread();
 
     this.listeners.forEach((fn) => {
       try {
@@ -145,6 +159,7 @@ class NotificationSocketService {
       }
     });
 
+    if (msg.notificationType === 'AI_WORKFLOW') return;
     const bizRoute = this.resolveBizRoute(msg.bizType, msg.bizId);
     ElNotification({
       title: msg.title || '系统通知',
@@ -159,6 +174,12 @@ class NotificationSocketService {
         }
       }
     });
+  }
+
+  private setState(state: ConnectionState) {
+    if (this.state === state) return;
+    this.state = state;
+    this.stateListeners.forEach((listener) => listener(state));
   }
 
   public resolveBizRoute(bizType?: string | null, bizId?: string | null): string | null {
