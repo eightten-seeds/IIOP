@@ -336,10 +336,12 @@ PC 只实现能完成管理和答辩演示的核心页面：
 - S2-A common + auth + gateway：PASS
 - S2-B device + inspection + maintenance + RocketMQ/WebSocket/Sentinel：PASS
 - S3 DeepSeek + LangChain4j + LangGraph4j：PASS
-- S4 PC Web：进行中
-- S5 HarmonyOS：未开始
-- S6 联调、演示、冻结和答辩材料：未开始
+- S4 PC Web：主要代码已完成，进入交付回归
+- S5 HarmonyOS：现场端核心流程已实现，进入交付回归
+- S6 联调、团队交付、冻结和答辩材料：当前阶段
 
 当前工作：
 
-**S4-A PC Core。Gate 1 已通过；角色、数据范围、业务流程与人机交互已冻结到 `06-role-usecases.md`。下一步 Gate 2 先补最小后端业务约束与关联能力，再开发业务化页面。**
+**S6 联调与交付准备。角色、数据范围、业务流程与人机交互继续以 `06-role-usecases.md` 为冻结基线；当前重点是回归核心业务链、清理阻断缺陷、保证组员可复现运行，并同步最终文档与答辩材料。**
+
+组员首次克隆与本地运行步骤见仓库根目录 `README.md` 的“组员首次运行”章节。
