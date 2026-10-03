@@ -7,4 +7,5 @@ public final class InspectionDtos {private InspectionDtos(){}
     public record TaskDetail(Task task,List<TaskItem> items,List<Abnormal> abnormals){}
     public record RecentHistory(Long deviceId,List<Task> tasks,List<Abnormal> abnormals){}
     public record AbnormalAiContext(Long id,Long taskId,Long deviceId,Long assigneeUserId,String severity,String title,String description){}
+    public record AbnormalSyncRequest(String status,Long aiDiagnosisId){}
 }

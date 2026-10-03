@@ -1,6 +1,8 @@
 import { AuthService } from '../../services/AuthService';
 import { Captcha } from '../../models/CommonModels';
 import { Tokens } from '../../theme/Tokens';
+import { image } from '@kit.ImageKit';
+import { util } from '@kit.ArkTS';
 
 @Component
 export struct LoginPage {
@@ -10,27 +12,65 @@ export struct LoginPage {
   @State captchaCode: string = '';
   @State captchaId: string = '';
   @State captchaImage: string = '';
+  @State captchaPixelMap: image.PixelMap | undefined = undefined;
   @State submitting: boolean = false;
   @State captchaLoading: boolean = false;
   @State errorText: string = '';
+  private captchaSequence: number = 0;
 
   aboutToAppear(): void { this.refreshCaptcha(); }
+  aboutToDisappear(): void { this.captchaPixelMap?.release(); }
 
-  async refreshCaptcha(): Promise<void> {
+  private async decodeCaptcha(value: string, sequence: number): Promise<image.PixelMap> {
+    const marker = ';base64,';
+    const markerIndex = value.indexOf(marker);
+    if (markerIndex < 0) throw new Error('验证码图片格式无效');
+    const bytes = new util.Base64Helper().decodeSync(value.substring(markerIndex + marker.length), util.Type.BASIC);
+    const source = image.createImageSource(bytes.buffer as ArrayBuffer);
+    try {
+      const pixelMap = await source.createPixelMap();
+      if (sequence !== this.captchaSequence) {
+        await pixelMap.release();
+        throw new Error('验证码请求已失效');
+      }
+      return pixelMap;
+    } finally { await source.release(); }
+  }
+
+  async refreshCaptcha(clearError: boolean = true): Promise<void> {
+    const sequence = ++this.captchaSequence;
     this.captchaLoading = true;
     this.captchaCode = '';
+    this.captchaId = '';
+    this.captchaImage = '';
+    const previous = this.captchaPixelMap;
+    this.captchaPixelMap = undefined;
+    if (previous !== undefined) await previous.release();
+    if (clearError) this.errorText = '';
     try {
       const value: Captcha = await AuthService.captcha();
+      if (sequence !== this.captchaSequence) return;
+      const pixelMap = await this.decodeCaptcha(value.image, sequence);
       this.captchaId = value.captchaId;
       this.captchaImage = value.image;
-    } catch (error) { this.errorText = error instanceof Error ? error.message : '验证码加载失败'; }
-    finally { this.captchaLoading = false; }
+      this.captchaPixelMap = pixelMap;
+    } catch (error) {
+      if (sequence !== this.captchaSequence) return;
+      this.captchaId = '';
+      this.captchaImage = '';
+      this.captchaPixelMap = undefined;
+      const refreshError = error instanceof Error ? error.message : '验证码加载失败';
+      this.errorText = clearError || this.errorText.length === 0 ? refreshError : `${this.errorText}；验证码刷新失败，请点击换一张`;
+    } finally { if (sequence === this.captchaSequence) this.captchaLoading = false; }
   }
 
   async submit(): Promise<void> {
     if (this.submitting) return;
     if (this.username.trim().length === 0 || this.password.length === 0 || this.captchaCode.trim().length === 0) {
       this.errorText = '请完整填写账号、密码和验证码'; return;
+    }
+    if (this.captchaId.length === 0 || this.captchaImage.length === 0 || this.captchaLoading) {
+      this.errorText = '验证码尚未成功加载，请换一张后重试'; return;
     }
     this.submitting = true; this.errorText = '';
     try {
@@ -41,7 +81,7 @@ export struct LoginPage {
     } catch (error) {
       this.password = '';
       this.errorText = error instanceof Error ? error.message : '登录失败，请重试';
-      await this.refreshCaptcha();
+      await this.refreshCaptcha(false);
     } finally { this.submitting = false; }
   }
 
@@ -59,11 +99,11 @@ export struct LoginPage {
         Row({ space: 10 }) {
           TextInput({ text: this.captchaCode, placeholder: '图形验证码' }).layoutWeight(1).height(52).backgroundColor(Tokens.elevated).fontColor(Tokens.text).placeholderColor(Tokens.textSecondary).borderRadius(12).onChange(v => this.captchaCode = v)
           Stack() {
-            if (this.captchaImage.length > 0) { Image(this.captchaImage).objectFit(ImageFit.Fill).width(118).height(50).borderRadius(10) }
+            if (this.captchaPixelMap !== undefined) { Image(this.captchaPixelMap).objectFit(ImageFit.Fill).width(118).height(50).borderRadius(10) }
             else { Text(this.captchaLoading ? '加载中' : '换一张').fontColor(Tokens.primary) }
           }.width(118).height(52).backgroundColor('#F4F6F8').borderRadius(10).onClick(() => this.refreshCaptcha())
         }.width('100%')
-        Button(this.submitting ? '登录中…' : '登录').width('100%').height(52).backgroundColor(Tokens.primary).fontColor('#0C1925').fontWeight(FontWeight.Bold).enabled(!this.submitting).onClick(() => this.submit())
+        Button(this.submitting ? '登录中…' : '登录').width('100%').height(52).backgroundColor(Tokens.primary).fontColor('#0C1925').fontWeight(FontWeight.Bold).enabled(!this.submitting && !this.captchaLoading && this.captchaId.length > 0).onClick(() => this.submit())
         Text('账号由系统管理员统一创建与分配').fontSize(12).fontColor(Tokens.textSecondary).margin({ top: 8 })
       }.width('100%').padding(Tokens.pagePadding).margin({ top: 72 })
     }.width('100%').height('100%').backgroundColor(Tokens.background)

@@ -32,7 +32,7 @@ export struct MyWorkOrdersPage {
       Row() { Text(this.devices.get(order.deviceId)?.deviceName ?? '设备信息加载中').fontSize(18).fontWeight(FontWeight.Medium).fontColor(Tokens.text).maxLines(2).layoutWeight(1); Text(statusText(order.status)).fontSize(12).fontColor(order.status === 'COMPLETED' ? Tokens.success : order.status === 'PROCESSING' ? Tokens.warning : Tokens.primary).padding({ left: 9, right: 9, top: 5, bottom: 5 }).backgroundColor(Tokens.elevated).borderRadius(12) }.width('100%')
       Text(order.title).fontSize(15).fontColor(Tokens.text).maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
       Text((this.devices.get(order.deviceId)?.installLocation ?? '位置未填写') + ' · ' + order.workOrderCode).fontSize(13).fontColor(Tokens.textSecondary)
-      Row() { Text('优先级 ' + statusText(order.priority)).fontColor(order.priority === 'HIGH' || order.priority === 'CRITICAL' ? Tokens.danger : Tokens.warning).fontSize(13); Blank(); Text(formatTime(order.updatedAt)).fontColor(Tokens.textSecondary).fontSize(12) }.width('100%')
+      Row() { Text('优先级 ' + statusText(order.priority)).fontColor(order.priority === 'HIGH' || order.priority === 'URGENT' ? Tokens.danger : Tokens.warning).fontSize(13); Blank(); Text(formatTime(order.updatedAt)).fontColor(Tokens.textSecondary).fontSize(12) }.width('100%')
     }.alignItems(HorizontalAlign.Start).width('100%').padding(18).backgroundColor(Tokens.surface).borderRadius(Tokens.radius).onClick(() => this.onOpen(order.id))
   }
 
@@ -42,7 +42,7 @@ export struct MyWorkOrdersPage {
       if (this.loading) { LoadingView({ message: '正在加载维修工单' }) }
       else if (this.errorText.length > 0) { ErrorView({ message: this.errorText, onRetry: () => this.load() }) }
       else if (this.orders.length === 0) { EmptyView({ message: '当前没有分配给你的维修工单。' }) }
-      else { List({ space: 12 }) { ForEach(this.orders, (order: WorkOrder) => { ListItem() { this.orderCard(order) } }, (order: WorkOrder) => order.id) }.layoutWeight(1).width('100%') }
+      else { List({ space: 12 }) { ForEach(this.orders, (order: WorkOrder) => { ListItem() { this.orderCard(order) } }, (order: WorkOrder) => `${order.id}_${order.status}_${order.updatedAt}_${this.revision}`) }.layoutWeight(1).width('100%') }
     }.width('100%').height('100%').padding(Tokens.pagePadding).backgroundColor(Tokens.background)
   }
 }

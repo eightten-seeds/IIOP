@@ -125,7 +125,12 @@ function updateNumberResult(item: TaskItem) {
   markDirty(item.id);
 }
 function setBoolean(item: TaskItem, value: 'NORMAL' | 'ABNORMAL') {
-  drafts[item.id].actualValue = value === 'NORMAL' ? '正常' : '异常';
+  const standard = String(item.standardValue || '').trim().toUpperCase();
+  if (standard !== 'NORMAL' && standard !== 'ABNORMAL') {
+    ElMessage.warning('该检查项缺少合法标准结果，请联系管理员修正模板');
+    return;
+  }
+  drafts[item.id].actualValue = value === 'NORMAL' ? standard : (standard === 'NORMAL' ? 'ABNORMAL' : 'NORMAL');
   drafts[item.id].resultStatus = value;
   markDirty(item.id);
 }

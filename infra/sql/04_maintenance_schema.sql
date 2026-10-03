@@ -73,11 +73,11 @@ CREATE TABLE IF NOT EXISTS mt_work_order (
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     PRIMARY KEY (id),
     UNIQUE KEY uk_mt_work_order_code (work_order_code),
-    KEY idx_mt_work_order_defect (defect_id),
+    UNIQUE KEY uk_mt_work_order_defect (defect_id),
+    UNIQUE KEY uk_mt_work_order_ai (ai_diagnosis_id),
     KEY idx_mt_work_order_device_status (device_id, status),
     KEY idx_mt_work_order_assignee_status (assignee_user_id, status),
     KEY idx_mt_work_order_priority_status (priority, status),
-    KEY idx_mt_work_order_ai (ai_diagnosis_id),
     KEY idx_mt_work_order_created_at (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='维修工单';
 

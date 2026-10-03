@@ -24,7 +24,7 @@ export struct TodayInspectionPage {
       const page = await InspectionService.tasks();
       const now = new Date();
       const localDate = now.getFullYear().toString() + '-' + (now.getMonth() + 1).toString().padStart(2, '0') + '-' + now.getDate().toString().padStart(2, '0');
-      this.tasks = page.records.filter(task => task.taskStatus === 'IN_PROGRESS' || task.overdueFlag === 1 || (task.scheduledStartTime ?? '').startsWith(localDate));
+      this.tasks = page.records.filter(task => task.taskStatus !== 'COMPLETED' || task.overdueFlag === 1 || (task.scheduledStartTime ?? '').startsWith(localDate) || (task.actualEndTime ?? '').startsWith(localDate));
       const ids: string[] = [];
       this.tasks.forEach(task => { if (!ids.includes(task.deviceId)) ids.push(task.deviceId); });
       await Promise.all(ids.map(async id => { try { this.devices.set(id, await DeviceService.detail(id)); } catch (error) {} }));
@@ -55,7 +55,7 @@ export struct TodayInspectionPage {
       if (this.loading) { LoadingView({ message: '正在加载巡检任务' }) }
       else if (this.errorText.length > 0) { ErrorView({ message: this.errorText, onRetry: () => this.load() }) }
       else if (this.tasks.length === 0) { EmptyView({ message: '当前没有分配给你的巡检任务。' }) }
-      else { List({ space: 12 }) { ForEach(this.tasks, (task: InspectionTask) => { ListItem() { this.taskCard(task) } }, (task: InspectionTask) => task.id) }.layoutWeight(1).width('100%') }
+      else { List({ space: 12 }) { ForEach(this.tasks, (task: InspectionTask) => { ListItem() { this.taskCard(task) } }, (task: InspectionTask) => `${task.id}_${task.taskStatus}_${task.completionRate}_${this.revision}`) }.layoutWeight(1).width('100%') }
     }.width('100%').height('100%').padding(Tokens.pagePadding).backgroundColor(Tokens.background)
   }
 }

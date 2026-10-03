@@ -86,6 +86,7 @@ CREATE TABLE IF NOT EXISTS ins_task (
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     PRIMARY KEY (id),
     UNIQUE KEY uk_ins_task_code (task_code),
+    UNIQUE KEY uk_ins_task_plan_window (plan_id, scheduled_start_time),
     KEY idx_ins_task_plan (plan_id),
     KEY idx_ins_task_device_time (device_id, scheduled_start_time),
     KEY idx_ins_task_assignee_status (assignee_user_id, task_status),

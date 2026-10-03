@@ -6,6 +6,7 @@ import { LoginPage } from './login/LoginPage';
 import { RoleHomePage } from './home/RoleHomePage';
 import { InspectorWorkspace } from './inspection/InspectorWorkspace';
 import { MaintainerWorkspace } from './maintenance/MaintainerWorkspace';
+import { BackNavigationStore } from '../stores/BackNavigationStore';
 
 enum RootState { Restoring, Login, Inspector, Maintainer, Manager, RestoreError }
 
@@ -15,12 +16,24 @@ struct Index {
   @State rootState: RootState = RootState.Restoring;
   @State restoreError: string = '';
 
-  aboutToAppear(): void { this.restore(); }
+  aboutToAppear(): void {
+    SessionStore.registerUnauthorizedHandler(() => this.rootState = RootState.Login);
+    this.restore();
+  }
+
+  onBackPress(): boolean { return BackNavigationStore.handle(); }
 
   private routeByRole(): void {
-    if (SessionStore.hasRole('INSPECTOR')) this.rootState = RootState.Inspector;
-    else if (SessionStore.hasRole('MAINTAINER')) this.rootState = RootState.Maintainer;
-    else this.rootState = RootState.Manager;
+    if (SessionStore.hasRole('MAINTAINER')) {
+      this.rootState = RootState.Maintainer;
+      console.info('[AUTH] route -> MAINTAINER');
+    } else if (SessionStore.hasRole('INSPECTOR')) {
+      this.rootState = RootState.Inspector;
+      console.info('[AUTH] route -> INSPECTOR');
+    } else {
+      this.rootState = RootState.Manager;
+      console.info('[AUTH] route -> MANAGER');
+    }
   }
 
   async restore(): Promise<void> {
@@ -35,6 +48,7 @@ struct Index {
   }
 
   async logout(): Promise<void> { await AuthService.logout(); this.rootState = RootState.Login; }
+  async relogin(): Promise<void> { await SessionStore.clearIdentity(); this.rootState = RootState.Login; }
 
   build() {
     Stack() {
@@ -43,11 +57,11 @@ struct Index {
       } else if (this.rootState === RootState.Login) {
         LoginPage({ onLoggedIn: () => this.routeByRole() })
       } else if (this.rootState === RootState.RestoreError) {
-        Column({ space: 18 }) { Text('身份验证暂不可用').fontSize(21).fontColor(Tokens.text); Text(this.restoreError).fontColor(Tokens.textSecondary); Button('重试').height(Tokens.touchHeight).backgroundColor(Tokens.primary).onClick(() => this.restore()) }.padding(28)
+        Column({ space: 18 }) { Text('身份验证暂不可用').fontSize(21).fontColor(Tokens.text); Text(this.restoreError).fontColor(Tokens.textSecondary); Button('重试').height(Tokens.touchHeight).backgroundColor(Tokens.primary).onClick(() => this.restore()); Button('重新登录').height(Tokens.touchHeight).backgroundColor(Tokens.elevated).fontColor(Tokens.danger).onClick(() => this.relogin()) }.padding(28)
       } else if (this.rootState === RootState.Inspector) {
-        InspectorWorkspace({ onLoggedOut: () => this.rootState = RootState.Login })
+        InspectorWorkspace({ onLoggedOut: () => this.rootState = RootState.Login, onSwitchRole: () => this.rootState = RootState.Maintainer })
       } else if (this.rootState === RootState.Maintainer) {
-        MaintainerWorkspace({ onLoggedOut: () => this.rootState = RootState.Login })
+        MaintainerWorkspace({ onLoggedOut: () => this.rootState = RootState.Login, onSwitchRole: () => this.rootState = RootState.Inspector })
       } else {
         RoleHomePage({ onLogout: () => this.logout() })
       }
