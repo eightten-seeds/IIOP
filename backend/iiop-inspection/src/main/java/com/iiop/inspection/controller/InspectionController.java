@@ -38,5 +38,5 @@ public class InspectionController {
     @GetMapping("/internal/inspection/devices/{deviceId}/recent-history") public Result<RecentHistory> recent(@PathVariable Long deviceId){return Result.success(service.recent(deviceId));}
     @GetMapping("/internal/inspection/abnormals/{id}") public Result<Abnormal> internalAbnormal(@PathVariable Long id){return Result.success(service.abnormal(id));}
     @GetMapping("/internal/inspection/abnormals/{id}/ai-context") public Result<AbnormalAiContext> abnormalAiContext(@PathVariable Long id){return Result.success(service.abnormalAiContext(id));}
-    @PutMapping("/internal/inspection/abnormals/{id}/sync") public Result<Abnormal> syncAbnormal(@PathVariable Long id,@RequestBody AbnormalSyncRequest v){return Result.success(service.syncAbnormal(id,v));}
+    @PutMapping("/internal/inspection/abnormals/{id}/ai-association") public Result<Abnormal> associateAbnormalAi(@PathVariable Long id,@RequestBody AbnormalAiAssociationRequest v){return Result.success(service.associateAbnormalAi(id,v));}
 }
