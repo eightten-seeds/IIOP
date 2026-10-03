@@ -2,7 +2,7 @@
 
 ## 1. 第一原则
 
-这是单人课程项目，时间优先。
+这是课程实训团队项目，时间优先。
 
 目标只有三个：
 
@@ -116,11 +116,17 @@ Entity 不跨服务。
 
 ## 9. 本地路径
 
+原开发机曾使用以下路径：
+
 - 项目：E:/IIOP
 - Maven repo：E:/DevCache/maven/repository
 - npm cache：E:/DevCache/npm
 - npm global：E:/DevCache/npm-global
 - 项目运行数据：E:/IIOP-data
+
+这些路径只代表原开发机，不作为组员机器的固定要求。组员首次运行按 README 的“组员首次运行”章节配置本地环境；Secret 放在 scripts/dev/local-secrets.ps1 或环境变量中，不提交 Git。
+
+现有一键启动脚本仍含部分原开发机绝对路径。跨机器开发时优先使用标准 Maven、npm 和 DevEco 流程，除非已显式完成路径配置化。
 
 不使用 Docker。
 
@@ -135,9 +141,10 @@ Entity 不跨服务。
 7. git diff --check
 8. Secret 检查
 9. commit
-10. push origin/main
-11. 报告
-12. 停止
+10. push 当前开发分支
+11. 通过 PR 合并到 main，避免多人直接覆盖 main
+12. 报告
+13. 停止
 
 不要自动进入下一阶段。
 

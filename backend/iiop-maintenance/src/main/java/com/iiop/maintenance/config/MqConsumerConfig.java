@@ -84,6 +84,7 @@ public class MqConsumerConfig {
                 }
             } catch (Exception ex) {
                 log.error("Failed to deserialize or process InspectionAbnormalEvent: {}", payload, ex);
+                throw new IllegalStateException("InspectionAbnormalEvent processing failed", ex);
             }
         };
     }
