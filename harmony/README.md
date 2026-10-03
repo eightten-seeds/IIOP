@@ -20,18 +20,19 @@ IIOP 原生 HarmonyOS 现场移动端，采用 Stage Model、ArkTS、ArkUI，并
 
 ## 首次运行
 
-首次需在 DevEco Studio 的 Device Manager 创建并启动 Phone Emulator，并为 Debug 构建完成自动签名配置。
+首次运行需要在组员自己的 DevEco Studio 环境中完成：
 
-组员机器先确认：
+1. 安装项目所需 SDK；
+2. 准备可用 Emulator 或真机；
+3. 完成 Debug 构建与签名配置；
+4. 确认设备能够访问当前电脑上运行的 Gateway；
+5. 根据当前设备和网络环境检查 `entry/src/main/ets/network/NetworkConfig.ets` 中的 Gateway 地址；
+6. 构建、安装并启动应用。
 
-1. PC 端 Gateway 已在宿主机 `8080` 启动；
-2. Emulator 能访问 `http://10.0.2.2:8080`；
-3. DevEco Studio 已安装对应 SDK、hvigor 与 hdc；
-4. Debug 签名可生成可安装 HAP；
-5. 真机调试时按实际局域网地址调整 `entry/src/main/ets/network/NetworkConfig.ets`，不要继续使用 Emulator 专用的 `10.0.2.2`。
+不同组员的 DevEco Studio 安装目录、SDK 目录、Emulator 实例目录和网络地址可能不同，文档不规定统一的本机绝对路径。
 
-仓库根目录的 `启动IIOP鸿蒙端.bat` 仍依赖原开发机的部分 DevEco / Emulator 绝对路径。原开发机可继续使用；组员机器路径不一致时，优先从 DevEco Studio 手工构建、安装和启动，或先按本机路径调整启动脚本。
+仓库根目录保留 HarmonyOS 启动脚本作为本地开发辅助工具。如果脚本与组员电脑环境不一致，优先使用 DevEco Studio 的标准构建、安装和调试流程，或仅在本机调整脚本配置。
 
-脚本会检查 Gateway、构建签名 HAP、安装并启动应用；如果仅生成 unsigned HAP，会停止而不会尝试安装无效包。
+应用只通过 Gateway 访问业务服务，不应直接连接各业务微服务。
 
-完整团队环境步骤见根目录 `README.md` 的“组员首次运行”章节。
+完整团队环境说明见根目录 `README.md` 的“组员首次运行”章节。
