@@ -10,6 +10,7 @@ import com.iiop.auth.domain.dto.WebSocketEventRequest;
 import com.iiop.auth.mapper.SysNotificationMapper;
 import com.iiop.common.api.ErrorCode;
 import com.iiop.common.api.PageResult;
+import com.iiop.common.api.PaginationGuard;
 import com.iiop.common.exception.BizException;
 import java.time.LocalDateTime;
 import org.springframework.stereotype.Service;
