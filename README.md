@@ -1,100 +1,247 @@
-# 基于微服务与 DeepSeek 大模型的工业设备智能巡检运维平台（IIOP）
+# IIOP · 工业设备智能巡检运维平台
 
-## 项目目标
+基于微服务与 DeepSeek 大模型的工业设备智能巡检运维平台。
 
-课程实训项目，当前进入团队协作、联调和交付阶段。
+当前仓库已经形成设备、巡检、异常、缺陷、AI 辅助诊断、维修工单、验收的第一版完整业务模型，并进入 S6 联调、回归、团队交付与答辩准备阶段。
 
-核心业务：
+## 1. 核心业务链
 
-设备  
-→ 巡检  
-→ 异常  
-→ 缺陷/工单  
-→ AI 辅助诊断  
-→ 维修  
-→ 验收
+```text
+设备建档
+→ 巡检模板 / 计划
+→ 生成巡检任务
+→ INSPECTOR 执行巡检
+→ 上报异常
+→ RocketMQ 形成缺陷
+→ AI 辅助诊断
+→ 人工确认
+→ 人工创建维修工单
+→ ADMIN / SUPER_ADMIN 分派
+→ MAINTAINER 维修
+→ ADMIN / SUPER_ADMIN 验收
+→ 历史与通知
+```
 
-## 技术栈
+AI 在本项目中只负责辅助分析和生成建议，不直接控制设备，也不自动创建正式工单。
 
-后端：
+## 2. 固定角色
+
+第一版业务角色固定为四种：
+
+| 角色 | 职责 |
+| --- | --- |
+| `SUPER_ADMIN` | 系统治理、最高权限保护、全局业务兜底 |
+| `ADMIN` | 设备/巡检/维修业务管理、用户日常管理、工单验收 |
+| `INSPECTOR` | 执行本人巡检任务、填写检查项、上报异常、使用 AI 辅助诊断 |
+| `MAINTAINER` | 处理本人维修工单、提交维修结果、使用/确认 AI 诊断 |
+
+数据库 seed 定义 33 个 permission code。第一版运行时冻结角色、permission 和角色权限矩阵；角色/权限页面只读，用户仍可以在固定四角色范围内分配岗位。
+
+详细规则见 [01-需求文档.md](./01-需求文档.md) 和 `docs/spec/06-role-usecases.md`。
+
+## 3. 技术栈
+
+### 后端
 
 - JDK 17
 - Spring Boot 3.5.0
 - Spring Cloud 2025.0.0
 - Spring Cloud Alibaba 2025.0.0.0
-- MySQL / MyBatis-Plus
-- Redis / Sa-Token
-- Nacos / Sentinel / RocketMQ
-- WebSocket
+- MyBatis-Plus 3.5.17
+- Sa-Token 1.46.0
+- MySQL 8.x
+- Redis
+- Nacos
+- RocketMQ
+- Sentinel
+- Spring WebSocket
+- OpenFeign
 
-AI：
+### AI
 
-- DeepSeek
-- LangChain4j
-- LangGraph4j
+- DeepSeek API
+- LangChain4j 1.20.2
+- LangGraph4j 1.9.2
 
-客户端：
+### PC Web
 
-- Vue 3 / Element Plus / ECharts / Three.js / Vue Flow
-- HarmonyOS / ArkTS / ArkUI
+- Vue 3
+- TypeScript
+- Vite
+- Vue Router
+- Pinia
+- Axios
+- Element Plus
+- ECharts
+- Three.js
+- Vue Flow
+- Browser WebSocket
 
-## 模块
+### HarmonyOS
 
-- iiop-common
-- iiop-gateway
-- iiop-auth
-- iiop-device
-- iiop-inspection
-- iiop-maintenance
-- iiop-ai
+- Stage Model
+- ArkTS
+- ArkUI
 
-## 第一版最简原则
+## 4. 后端模块
 
-只实现：
+| 模块 | 默认端口 | 职责 |
+| --- | ---: | --- |
+| `iiop-gateway` | 8080 | API/WS 统一入口、登录校验、Sentinel |
+| `iiop-auth` | 9201 | 认证、用户、RBAC、通知、WebSocket |
+| `iiop-device` | 9202 | 设备、分类、指标、SOP |
+| `iiop-inspection` | 9203 | 模板、计划、任务、异常 |
+| `iiop-maintenance` | 9204 | 告警、缺陷、工单、维修、验收 |
+| `iiop-ai` | 9205 | DeepSeek 诊断与 LangGraph4j 工作流 |
+| `iiop-common` | 无 | 公共 Result、错误码、DTO、MQ 事件 |
 
-- Nacos 服务发现
-- Redis 登录 Session
-- 一个 RocketMQ 异步链
-- 一个 Sentinel 限流示例
-- 一个 WebSocket 通知链
-- 一个 DeepSeek 5 节点诊断链
-- 一个 PC 主业务端
-- 一个 HarmonyOS 现场端
+客户端统一通过 Gateway 访问公开业务 API。
 
-不做生产级复杂治理、额外平台或新微服务。
+详细服务调用关系见 [03-微服务架构设计.md](./03-微服务架构设计.md)。
 
-## 当前阶段
+## 5. 数据库
 
-已完成主要代码实现：
+项目当前使用 5 个逻辑数据库、25 张业务表：
 
-- S1 基础设施
-- S2 后端与业务主链
-- S3 DeepSeek + LangChain4j + LangGraph4j
-- S4 PC Web 核心业务、可视化与交互
-- S5 HarmonyOS 现场端核心流程
+| 数据库 | 表数 |
+| --- | ---: |
+| `iiop_auth` | 6 |
+| `iiop_device` | 5 |
+| `iiop_inspection` | 6 |
+| `iiop_maintenance` | 6 |
+| `iiop_ai` | 2 |
 
-当前进入：
+各业务服务只直接访问自己的数据库，跨服务数据通过 REST / Feign 获取，不做跨库 JOIN。
 
-**S6 联调、回归、团队交付与答辩准备。**
+完整表结构、唯一约束、状态字段和关系见 [02-数据库设计.md](./02-数据库设计.md)。
 
-角色、权限、数据范围和业务流程的冻结基线以 `docs/spec/06-role-usecases.md` 为准。完整阶段定义见 `docs/spec/05-roadmap.md`。
+## 6. 当前已经实现的主要能力
 
-## 组员首次运行
+### Auth / RBAC
 
-本节用于组员在自己的电脑上建立 IIOP 本地开发环境。每个人的安装目录、磁盘盘符、数据库账号、Secret 和开发工具位置都可能不同，仓库文档不约定这些个人路径。
+- 图形验证码
+- 登录 / 登出 / `/me`
+- Sa-Token + Redis Session
+- BCrypt 密码
+- 用户管理
+- 用户角色分配
+- 固定角色/权限只读查看
+- 401 / 403 语义分离
+- 通知 REST
+- 原生 WebSocket 通知
 
-### 1. 克隆仓库
+### Device
 
-使用 Git 克隆仓库并进入项目目录：
+- 分类 CRUD
+- 设备 CRUD
+- 设备状态与风险
+- 指标定义
+- 指标数据、历史、趋势、快照
+- SOP
+- 设备统计
+- 设备删除活动引用保护
 
-```bash
-git clone <GitHub 或 Gitee 仓库地址>
-cd IIOP
+### Inspection
+
+- 巡检模板
+- 检查项
+- Vue Flow 流程定义
+- 巡检计划
+- 人工生成任务
+- 巡检执行
+- 异常上报
+- RocketMQ 发布异常事件
+
+### Maintenance
+
+- 告警
+- 缺陷
+- Defect 与 AI 绑定
+- 工单创建
+- 工单分派
+- 维修执行
+- 维修记录
+- 工单日志
+- 验收
+- RocketMQ 异常消费与缺陷幂等
+
+### AI
+
+真实五节点：
+
+```text
+LOAD_CONTEXT
+→ ANALYZE_WITH_DEEPSEEK
+→ RISK_CHECK
+→ GENERATE_ADVICE
+→ PREPARE_WORK_ORDER_DRAFT
 ```
 
-团队协作以 `main` 为稳定基线。开发或修复从 `main` 创建个人分支，通过 PR 合并，避免多人直接覆盖主分支。
+AI 会保存诊断主记录和工作流轨迹，并要求正式工单继续经过人工确认和人工创建。
 
-### 2. 准备本地依赖
+### PC Web
+
+当前已经存在：
+
+- 角色工作台
+- 设备列表 / 详情 / Three.js 空间视图
+- 巡检模板 / 计划 / 任务 / 异常
+- Vue Flow 模板流程编辑
+- 缺陷 / 工单
+- AI 诊断列表 / 详情
+- 用户管理
+- 角色 / 权限只读页
+- 通知中心
+- ECharts 真实业务统计
+- WebSocket 实时通知与 AI 工作流进度
+- 403 / 404 / 无角色 / 身份恢复失败页面
+
+### HarmonyOS
+
+当前主要服务现场岗位：
+
+INSPECTOR：
+
+```text
+登录 → 今日巡检 → 任务详情 → 巡检执行 → 异常 → AI
+```
+
+MAINTAINER：
+
+```text
+登录 → 我的工单 → 工单详情 → 开始维修 → 提交维修结果 → AI
+```
+
+多角色用户可以在巡检和维修工作区之间切换。
+
+## 7. 目录结构
+
+```text
+IIOP
+├─ backend
+│  ├─ iiop-common
+│  ├─ iiop-gateway
+│  ├─ iiop-auth
+│  ├─ iiop-device
+│  ├─ iiop-inspection
+│  ├─ iiop-maintenance
+│  └─ iiop-ai
+├─ frontend
+│  └─ iiop-web
+├─ harmony
+├─ infra
+│  ├─ sql
+│  └─ local
+├─ scripts
+├─ docs
+│  └─ spec
+├─ 01-需求文档.md
+├─ 02-数据库设计.md
+├─ 03-微服务架构设计.md
+└─ README.md
+```
+
+## 8. 本地开发前置条件
 
 PC 与后端开发需要：
 
@@ -106,36 +253,56 @@ PC 与后端开发需要：
 - Nacos
 - RocketMQ
 
-HarmonyOS 开发另外需要：
+HarmonyOS 开发还需要：
 
 - DevEco Studio
-- 对应 HarmonyOS / OpenHarmony SDK
-- 可用 Emulator 或真机
-- Debug 构建与签名环境
+- 项目所需 SDK
+- Emulator 或真机
+- 可用的 Debug 构建与签名环境
 
-本项目第一版不使用 Docker。
+各成员电脑的软件安装目录、磁盘盘符、数据库账号和 Secret 由各自本地环境决定，仓库不把某一台电脑的绝对路径作为团队规范。
 
-各工具安装到哪里由组员自己的电脑决定。需要通过 `JAVA_HOME`、系统 `PATH`、服务配置或本地环境变量让项目能够找到这些工具和服务。
+## 9. 本地配置原则
 
-### 3. 配置本地环境
+真实 Secret 不提交 Git，包括：
 
-仓库不保存真实数据库密码、Redis 密码、DeepSeek API Key、Token 等 Secret。
+- MySQL 密码
+- Redis 密码
+- DeepSeek API Key
+- Token
+- 个人本机私有配置
 
-各后端服务的可配置项以对应的 `application.yml` 为准。常见配置包括：
+各服务的环境变量和默认值以对应 `application.yml` 为准。
 
-- MySQL 连接地址、用户名和密码
-- Redis 地址和密码
-- Nacos 地址、namespace、group
-- RocketMQ NameServer
-- DeepSeek API Key、Base URL、模型名称
+常见环境配置包括：
 
-如果某个组件不运行在本机、端口与默认配置不同，按该组员自己的实际环境修改对应环境变量或本地配置。
+- `MYSQL_*_URL`
+- `MYSQL_*_USERNAME`
+- `MYSQL_*_PASSWORD`
+- `REDIS_HOST`
+- `REDIS_PORT`
+- `REDIS_PASSWORD`
+- `NACOS_SERVER_ADDR`
+- `NACOS_NAMESPACE`
+- `NACOS_GROUP`
+- `ROCKETMQ_NAME_SERVER`
+- `DEEPSEEK_API_KEY`
+- `DEEPSEEK_BASE_URL`
+- `DEEPSEEK_MODEL`
 
-不要把个人密码、API Key、Token 或本机私有配置提交到 GitHub / Gitee。
+Web Gateway 地址可通过 `VITE_GATEWAY_URL` 配置。
 
-### 4. 初始化数据库
+HarmonyOS Gateway 地址位于：
 
-全新数据库第一次初始化按顺序执行：
+```text
+harmony/entry/src/main/ets/network/NetworkConfig.ets
+```
+
+设备、模拟器和网络环境不同，Gateway 地址按各成员自己的环境设置。
+
+## 10. 数据库初始化
+
+全新数据库按顺序执行：
 
 ```text
 infra/sql/00_create_databases.sql
@@ -147,90 +314,109 @@ infra/sql/05_ai_schema.sql
 infra/sql/06_seed_data.sql
 ```
 
-`06_seed_data.sql` 初始化固定四角色、权限基线和演示业务基础数据。
+`06_seed_data.sql` 初始化：
 
-`07_final_functional_closure.sql` 是历史收口脚本，当前不作为全新数据库首次初始化的必跑脚本。旧数据库迁移时应先核对已有索引和约束，再决定是否执行。
+- 固定四角色；
+- 33 个权限码；
+- 固定角色权限映射；
+- 虚构演示设备、指标、SOP、巡检模板等基础数据。
 
-### 5. 构建后端
+它不写入真实密码、Token 或 API Key。
 
-进入 `backend`：
+`07_final_functional_closure.sql` 属于历史收口脚本，当前不作为 fresh database 第一次初始化的默认必跑步骤。
+
+## 11. 后端构建
 
 ```bash
+cd backend
 mvn clean test
 mvn package -DskipTests
 ```
 
-后端包含 Gateway、Auth、Device、Inspection、Maintenance、AI 六个可启动服务。客户端统一通过 Gateway 访问业务。
+后端运行前需要确保当前开发所需的 MySQL、Redis、Nacos、RocketMQ 等依赖已经可用。
 
-如果构建失败，优先检查：
+仓库中的本地辅助启动脚本可以继续用于已有开发环境，但不作为所有成员电脑的统一安装路径规范。
 
-- JDK 是否为 17
-- Maven 是否可用
-- Maven 依赖是否完整
-- 本地环境变量是否配置
-- 基础设施是否按当前开发任务要求启动
-
-### 6. 启动 PC Web
-
-进入：
-
-```text
-frontend/iiop-web
-```
-
-执行：
+## 12. PC Web
 
 ```bash
+cd frontend/iiop-web
 npm install
 npm run dev
 ```
 
-开发服务器地址以终端实际输出为准。Web 访问的 Gateway 地址可通过前端环境配置调整。
+生产构建：
 
-### 7. 关于仓库中的一键启动脚本
-
-仓库保留 Windows 一键启动脚本，用于现有开发环境快速启动。
-
-这些脚本依赖本机已安装的软件、服务和开发工具，因此不作为所有组员电脑的统一环境标准。组员电脑环境不同时，应按自己的安装位置和服务配置运行项目，或在本机自行调整对应脚本。
-
-本轮团队交付文档不会把任何成员电脑的盘符或软件安装目录写成公共规范。
-
-### 8. HarmonyOS 本地运行
-
-HarmonyOS 端统一通过 Gateway 访问业务。
-
-网络配置位于：
-
-```text
-harmony/entry/src/main/ets/network/NetworkConfig.ets
+```bash
+npm run build
 ```
 
-Emulator、真机和不同网络环境访问宿主机的地址可能不同。组员应根据自己的 DevEco、设备和网络环境设置 Gateway 地址，不要直接照搬其他成员电脑的网络地址。
+开发服务器地址以 Vite 终端实际输出为准。
+
+## 13. HarmonyOS
+
+使用 DevEco Studio 打开 `harmony` 工程，按本机 SDK、设备和签名环境构建运行。
+
+HarmonyOS 客户端只通过 Gateway 访问业务服务。
 
 详细说明见 `harmony/README.md`。
 
-### 9. 首次运行最小检查
+## 14. 文档
 
-环境准备完成后至少确认：
+正式项目文档：
 
-1. 所需基础设施已启动；
-2. 六个后端服务能正常启动并注册；
-3. Gateway 能访问 Auth 和业务服务；
-4. Web 能通过 Gateway 调用真实 API；
-5. 数据库表和基础数据已初始化；
-6. 当前开发所需的业务主链可以完成；
-7. 使用 AI 功能时，本机 DeepSeek 配置有效；
-8. HarmonyOS 开发成员能从自己的设备环境访问 Gateway。
+- [01-需求文档.md](./01-需求文档.md)
+- [02-数据库设计.md](./02-数据库设计.md)
+- [03-微服务架构设计.md](./03-微服务架构设计.md)
 
-如果只开发某个模块，可以按需要启动相关服务；提交合并前应完成受影响业务链的回归。
+内部实现规范：
 
-## 文档入口
+- `docs/spec/00-overview.md`
+- `docs/spec/01-database.md`
+- `docs/spec/02-backend.md`
+- `docs/spec/03-client.md`
+- `docs/spec/04-ai.md`
+- `docs/spec/05-roadmap.md`
+- `docs/spec/06-role-usecases.md`
 
-- 项目总纲：`docs/spec/00-overview.md`
-- 数据库：`docs/spec/01-database.md`
-- 后端：`docs/spec/02-backend.md`
-- PC / Harmony 客户端：`docs/spec/03-client.md`
-- AI：`docs/spec/04-ai.md`
-- 路线与验收：`docs/spec/05-roadmap.md`
-- 角色、权限、业务流程冻结基线：`docs/spec/06-role-usecases.md`
-- HarmonyOS 运行说明：`harmony/README.md`
+角色、数据范围、状态机和职责交接继续以 `docs/spec/06-role-usecases.md` 为冻结业务基线。
+
+## 15. 当前阶段
+
+当前阶段：
+
+```text
+S1 基础设施：PASS
+S2 后端：PASS
+S3 AI：PASS
+S4 PC Web：主要代码已完成
+S5 HarmonyOS：现场核心流程已实现
+S6 联调、回归、团队交付、冻结和答辩：当前阶段
+```
+
+目前重点是：
+
+- 完整主链回归；
+- 多角色与权限回归；
+- RocketMQ、WebSocket、AI 失败场景检查；
+- 团队环境复现；
+- 最终代码冻结；
+- 实训报告和答辩材料。
+
+## 16. 当前实现边界
+
+为了保持课程项目第一版可运行、可解释、可答辩，当前没有实现：
+
+- Docker / Kubernetes
+- 分布式事务框架
+- Outbox
+- 服务网格
+- 完整生产监控平台
+- RAG
+- 向量数据库
+- Agent
+- 多模型
+- 低代码 / BI 平台
+- AI 自动创建正式工单
+
+这些能力不属于当前仓库实现，不应在报告或答辩中描述为已经完成。
