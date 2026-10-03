@@ -83,3 +83,8 @@ function Get-IiopNpmCommand {
     }
     return $npm
 }
+
+function ConvertTo-IiopPowerShellLiteral {
+    param([string]$Value)
+    return "'" + $Value.Replace("'", "''") + "'"
+}
