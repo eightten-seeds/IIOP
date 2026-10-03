@@ -18,9 +18,9 @@ S1 基础设施
 - S1：PASS
 - S2：PASS
 - S3：PASS
-- S4：S4 PC Web PACK3 completed, awaiting independent review.
-- S5：未开始
-- S6：未开始
+- S4：主要代码已完成，进入交付回归
+- S5：HarmonyOS 现场端核心流程已实现，进入交付回归
+- S6：当前阶段，进行联调、团队交付、冻结与答辩准备
 
 ## 2. S1 基础设施
 
@@ -231,6 +231,8 @@ S4-B 不扩张业务范围。
 
 ## 6. S5 HarmonyOS
 
+状态：核心流程已实现，进入交付回归。
+
 S5 必须真实使用 HarmonyOS + ArkTS + ArkUI，并通过 HTTP REST 访问 Gateway。
 
 一轮完成核心移动流程：
@@ -346,8 +348,12 @@ S1：PASS
 S2-A：PASS  
 S2-B：PASS  
 S3：PASS  
-S4：S4 PC Web PACK3 completed, awaiting independent review.
+S4：主要代码已完成，进入交付回归  
+S5：现场端核心流程已实现，进入交付回归  
+S6：当前阶段
 
 当前：
 
-**S4 PC Web PACK 3 已完成：Dashboard ECharts 可视化、专用 NotificationList 与原生 WebSocket 实时通知联动、Three.js 3D 设备空间场景与真实状态/坐标绑定、Vue Flow V1 流程图编辑与回显持久化、登录与管理布局响应式修整均已闭环。当前阶段已完成，等待独立验收，不提前进入 PACK 4。**
+**项目进入 S6 联调、团队交付、冻结与答辩准备。当前优先级是保证核心业务主链可回归、组员可以从 GitHub / Gitee 克隆并建立本地环境、阻断缺陷有明确处理结果、文档与真实代码保持一致。**
+
+首次运行与本地环境步骤统一见仓库根目录 `README.md` 的“组员首次运行”章节。
