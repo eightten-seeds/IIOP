@@ -18,6 +18,7 @@ import cn.dev33.satoken.annotation.SaCheckPermission;import com.iiop.common.api.
  @SaCheckPermission("maintenance:workorder:process") @PostMapping("/api/maintenance/work-orders/{id}/start") public Result<WorkOrder> start(@PathVariable Long id,@RequestParam(required=false)String comment){return Result.success(service.start(id,comment));}
  @SaCheckPermission("maintenance:workorder:process") @PostMapping("/api/maintenance/work-orders/{id}/repair-result") public Result<WorkOrder> repair(@PathVariable Long id,@RequestBody RepairRequest r){return Result.success(service.repair(id,r));}
  @SaCheckPermission("maintenance:workorder:accept") @PostMapping("/api/maintenance/work-orders/{id}/acceptance") public Result<WorkOrder> accept(@PathVariable Long id,@RequestBody AcceptanceRequest r){return Result.success(service.accept(id,r));}
+ @GetMapping("/internal/maintenance/devices/{deviceId}/active-reference-count") public Result<Long> activeDeviceReferenceCount(@PathVariable Long deviceId){return Result.success(service.activeDeviceReferenceCount(deviceId));}
  @GetMapping("/internal/maintenance/devices/{deviceId}/history") public Result<MaintenanceHistory> history(@PathVariable Long deviceId){return Result.success(service.history(deviceId));}
  @GetMapping("/internal/maintenance/alarms/{id}") public Result<Alarm> internalAlarm(@PathVariable Long id){return Result.success(service.alarm(id));}
 }
