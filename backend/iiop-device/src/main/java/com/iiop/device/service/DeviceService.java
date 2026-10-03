@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.iiop.common.api.ErrorCode;
 import com.iiop.common.api.PageResult;
+import com.iiop.common.api.PaginationGuard;
 import com.iiop.common.exception.BizException;
 import com.iiop.device.domain.DeviceDtos.*;
 import com.iiop.device.domain.DeviceModels.*;
