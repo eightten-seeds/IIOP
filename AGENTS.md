@@ -114,21 +114,20 @@ Entity 不跨服务。
 
 使用环境变量。
 
-## 9. 本地路径
+## 9. 本地环境
 
-原开发机曾使用以下路径：
+组员电脑的项目目录、磁盘盘符、JDK、Maven、Node、Nacos、RocketMQ、DevEco Studio 和 Emulator 安装位置均由各自本地环境决定。
 
-- 项目：E:/IIOP
-- Maven repo：E:/DevCache/maven/repository
-- npm cache：E:/DevCache/npm
-- npm global：E:/DevCache/npm-global
-- 项目运行数据：E:/IIOP-data
+仓库规范不得把某个成员电脑的绝对路径当成团队统一路径。
 
-这些路径只代表原开发机，不作为组员机器的固定要求。组员首次运行按 README 的“组员首次运行”章节配置本地环境；Secret 放在 scripts/dev/local-secrets.ps1 或环境变量中，不提交 Git。
+要求：
 
-现有一键启动脚本仍含部分原开发机绝对路径。跨机器开发时优先使用标准 Maven、npm 和 DevEco 流程，除非已显式完成路径配置化。
-
-不使用 Docker。
+- JDK 版本满足项目要求；
+- Maven、Node/npm 等命令可由本机环境找到；
+- 数据库、中间件和 AI Secret 使用本地环境变量或本地配置；
+- 真实密码、Token、API Key 不提交 Git；
+- 一键启动脚本属于本地开发辅助工具，不作为跨机器环境事实来源；
+- 不使用 Docker。
 
 ## 10. 每轮流程
 
