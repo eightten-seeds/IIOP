@@ -25,9 +25,10 @@ public class AdminService {
     public AdminService(SysUserMapper u,SysRoleMapper r,SysPermissionMapper p,SysUserRoleMapper ur,SysRolePermissionMapper rp,PasswordEncoder e){users=u;roles=r;permissions=p;userRoles=ur;rolePermissions=rp;encoder=e;}
 
     public PageResult<UserSummary> users(long pageNum,long pageSize,String keyword,String status,String roleCode){
+        long safePageSize=PaginationGuard.limit(pageNum,pageSize);
         var q=Wrappers.<SysUser>lambdaQuery().eq(status!=null&&!status.isBlank(),SysUser::getStatus,status).and(keyword!=null&&!keyword.isBlank(),w->w.like(SysUser::getUsername,keyword).or().like(SysUser::getRealName,keyword));
-        if(roleCode!=null&&!roleCode.isBlank()){SysRole role=roles.selectOne(Wrappers.<SysRole>lambdaQuery().eq(SysRole::getRoleCode,roleCode));if(role==null)return new PageResult<>(pageNum,pageSize,0,List.of());q.inSql(SysUser::getId,"select user_id from sys_user_role where role_id="+role.getId());}
-        IPage<SysUser> page=users.selectPage(new Page<>(pageNum,PaginationGuard.limit(pageNum,pageSize)),q.orderByDesc(SysUser::getCreatedAt));
+        if(roleCode!=null&&!roleCode.isBlank()){SysRole role=roles.selectOne(Wrappers.<SysRole>lambdaQuery().eq(SysRole::getRoleCode,roleCode));if(role==null)return new PageResult<>(pageNum,safePageSize,0,List.of());q.inSql(SysUser::getId,"select user_id from sys_user_role where role_id="+role.getId());}
+        IPage<SysUser> page=users.selectPage(new Page<>(pageNum,safePageSize),q.orderByDesc(SysUser::getCreatedAt));
         return new PageResult<>(page.getCurrent(),page.getSize(),page.getTotal(),page.getRecords().stream().map(this::summary).toList());
     }
     public UserSummary user(Long id){return summary(requireUser(id));}
