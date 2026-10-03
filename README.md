@@ -81,69 +81,61 @@ AI：
 
 ## 组员首次运行
 
-本节用于组员从 GitHub / Gitee 克隆仓库后建立自己的本地开发环境。仓库不包含真实数据库密码、Redis 密码、DeepSeek API Key、Token 或个人本机配置。
+本节用于组员在自己的电脑上建立 IIOP 本地开发环境。每个人的安装目录、磁盘盘符、数据库账号、Secret 和开发工具位置都可能不同，仓库文档不约定这些个人路径。
 
 ### 1. 克隆仓库
 
-建议使用 Git 克隆，不建议下载 ZIP 后重新建仓库，这样可以保留分支和提交历史。
+使用 Git 克隆仓库并进入项目目录：
 
 ```bash
-git clone <Gitee 或 GitHub 仓库地址>
+git clone <GitHub 或 Gitee 仓库地址>
 cd IIOP
 ```
 
-团队协作统一以 `main` 为稳定基线。开发新功能或修复时从 `main` 创建个人分支，不直接覆盖其他成员代码。
+团队协作以 `main` 为稳定基线。开发或修复从 `main` 创建个人分支，通过 PR 合并，避免多人直接覆盖主分支。
 
-### 2. 本地依赖
+### 2. 准备本地依赖
 
-基础开发环境：
+PC 与后端开发需要：
 
 - JDK 17
-- Maven 3.9+
+- Maven
 - Node.js / npm
-- MySQL 8.x
+- MySQL
 - Redis
-- Nacos 3.x
-- RocketMQ 5.x
+- Nacos
+- RocketMQ
 
-HarmonyOS 开发成员另外需要：
+HarmonyOS 开发另外需要：
 
 - DevEco Studio
-- OpenHarmony / HarmonyOS SDK
-- Phone Emulator 或可用真机
-- Debug 签名配置
+- 对应 HarmonyOS / OpenHarmony SDK
+- 可用 Emulator 或真机
+- Debug 构建与签名环境
 
 本项目第一版不使用 Docker。
 
-### 3. 创建本地 Secret 配置
+各工具安装到哪里由组员自己的电脑决定。需要通过 `JAVA_HOME`、系统 `PATH`、服务配置或本地环境变量让项目能够找到这些工具和服务。
 
-复制模板：
+### 3. 配置本地环境
 
-```powershell
-Copy-Item scripts\dev\local-secrets.example.ps1 scripts\dev\local-secrets.ps1
-```
+仓库不保存真实数据库密码、Redis 密码、DeepSeek API Key、Token 等 Secret。
 
-然后编辑：
+各后端服务的可配置项以对应的 `application.yml` 为准。常见配置包括：
 
-```text
-scripts/dev/local-secrets.ps1
-```
+- MySQL 连接地址、用户名和密码
+- Redis 地址和密码
+- Nacos 地址、namespace、group
+- RocketMQ NameServer
+- DeepSeek API Key、Base URL、模型名称
 
-至少配置：
+如果某个组件不运行在本机、端口与默认配置不同，按该组员自己的实际环境修改对应环境变量或本地配置。
 
-- `MYSQL_AUTH_USERNAME` / `MYSQL_AUTH_PASSWORD`
-- `MYSQL_DEVICE_USERNAME` / `MYSQL_DEVICE_PASSWORD`
-- `MYSQL_INSPECTION_USERNAME` / `MYSQL_INSPECTION_PASSWORD`
-- `MYSQL_MAINTENANCE_USERNAME` / `MYSQL_MAINTENANCE_PASSWORD`
-- `MYSQL_AI_USERNAME` / `MYSQL_AI_PASSWORD`
-- `REDIS_PASSWORD`，本地 Redis 无密码时可留空
-- `DEEPSEEK_API_KEY`，需要真实 AI 诊断时填写
-
-`local-secrets.ps1` 已被 `.gitignore` 排除。禁止把真实密码或 API Key 提交到 GitHub / Gitee。
+不要把个人密码、API Key、Token 或本机私有配置提交到 GitHub / Gitee。
 
 ### 4. 初始化数据库
 
-Fresh Database 第一次初始化按顺序执行：
+全新数据库第一次初始化按顺序执行：
 
 ```text
 infra/sql/00_create_databases.sql
@@ -155,127 +147,82 @@ infra/sql/05_ai_schema.sql
 infra/sql/06_seed_data.sql
 ```
 
-`06_seed_data.sql` 只初始化角色、权限和基础演示数据，不提交真实登录密码。
+`06_seed_data.sql` 初始化固定四角色、权限基线和演示业务基础数据。
 
-`07_final_functional_closure.sql` 属于历史收口脚本。当前 fresh schema 已包含其中部分最终约束，因此组员首次建库时不要再次执行 `07`，避免重复索引冲突。后续如需做旧库迁移，应先核对目标数据库版本。
+`07_final_functional_closure.sql` 是历史收口脚本，当前不作为全新数据库首次初始化的必跑脚本。旧数据库迁移时应先核对已有索引和约束，再决定是否执行。
 
-### 5. 创建首个超级管理员
+### 5. 构建后端
 
-Fresh Database 默认没有真实用户账号。
-
-在 `local-secrets.ps1` 中设置：
-
-```powershell
-$env:IIOP_BOOTSTRAP_ADMIN_ENABLED = "true"
-$env:IIOP_BOOTSTRAP_ADMIN_USERNAME = "superadmin"
-$env:IIOP_BOOTSTRAP_ADMIN_PASSWORD = "至少8位的新密码"
-```
-
-Auth 服务第一次成功启动后会在 `dev` profile 下创建该 `SUPER_ADMIN`。确认账号已创建后，可以把 `IIOP_BOOTSTRAP_ADMIN_ENABLED` 改回 `false`。
-
-不要在文档、群聊截图或 Git 仓库中共享真实密码。
-
-### 6. 启动基础设施
-
-确保以下本机服务可用：
-
-| 组件 | 默认地址 / 端口 |
-| --- | --- |
-| MySQL | `127.0.0.1:3306` |
-| Redis | `127.0.0.1:6379` |
-| Nacos | `127.0.0.1:8848` |
-| RocketMQ NameServer | `127.0.0.1:9876` |
-| RocketMQ Broker | `127.0.0.1:10911` |
-
-所有后端服务通过 Nacos 做服务发现。
-
-### 7. 构建后端
-
-在仓库根目录进入 `backend`：
+进入 `backend`：
 
 ```bash
-cd backend
 mvn clean test
 mvn package -DskipTests
 ```
 
-后端服务端口：
+后端包含 Gateway、Auth、Device、Inspection、Maintenance、AI 六个可启动服务。客户端统一通过 Gateway 访问业务。
 
-| 服务 | 端口 |
-| --- | ---: |
-| Gateway | 8080 |
-| Auth | 9201 |
-| Device | 9202 |
-| Inspection | 9203 |
-| Maintenance | 9204 |
-| AI | 9205 |
+如果构建失败，优先检查：
 
-客户端统一通过 Gateway `8080` 访问业务，不应直接依赖 9201 到 9205。
+- JDK 是否为 17
+- Maven 是否可用
+- Maven 依赖是否完整
+- 本地环境变量是否配置
+- 基础设施是否按当前开发任务要求启动
 
-### 8. 启动 PC Web
+### 6. 启动 PC Web
+
+进入：
+
+```text
+frontend/iiop-web
+```
+
+执行：
 
 ```bash
-cd frontend/iiop-web
 npm install
 npm run dev
 ```
 
-默认访问：
+开发服务器地址以终端实际输出为准。Web 访问的 Gateway 地址可通过前端环境配置调整。
+
+### 7. 关于仓库中的一键启动脚本
+
+仓库保留 Windows 一键启动脚本，用于现有开发环境快速启动。
+
+这些脚本依赖本机已安装的软件、服务和开发工具，因此不作为所有组员电脑的统一环境标准。组员电脑环境不同时，应按自己的安装位置和服务配置运行项目，或在本机自行调整对应脚本。
+
+本轮团队交付文档不会把任何成员电脑的盘符或软件安装目录写成公共规范。
+
+### 8. HarmonyOS 本地运行
+
+HarmonyOS 端统一通过 Gateway 访问业务。
+
+网络配置位于：
 
 ```text
-http://127.0.0.1:5173
+harmony/entry/src/main/ets/network/NetworkConfig.ets
 ```
 
-如只做前端页面开发，至少保证 Gateway 和当前页面依赖的后端服务已启动。
+Emulator、真机和不同网络环境访问宿主机的地址可能不同。组员应根据自己的 DevEco、设备和网络环境设置 Gateway 地址，不要直接照搬其他成员电脑的网络地址。
 
-### 9. 一键启动脚本说明
+详细说明见 `harmony/README.md`。
 
-仓库根目录提供：
+### 9. 首次运行最小检查
 
-- `启动IIOP.bat`
-- `启动IIOP鸿蒙端.bat`
+环境准备完成后至少确认：
 
-当前这些脚本仍保留原开发机的固定 Windows 路径，例如 `E:\IIOP`、DevEco 安装目录、RocketMQ 安装目录等。
+1. 所需基础设施已启动；
+2. 六个后端服务能正常启动并注册；
+3. Gateway 能访问 Auth 和业务服务；
+4. Web 能通过 Gateway 调用真实 API；
+5. 数据库表和基础数据已初始化；
+6. 当前开发所需的业务主链可以完成；
+7. 使用 AI 功能时，本机 DeepSeek 配置有效；
+8. HarmonyOS 开发成员能从自己的设备环境访问 Gateway。
 
-因此：
-
-- 原开发机可以继续使用一键脚本；
-- 组员电脑如果目录不同，不要直接认为脚本可以开箱即用；
-- 组员首次运行优先按本章节手工完成依赖、数据库和构建；
-- 后续如需让一键脚本跨机器通用，应把这些路径继续配置化。
-
-这属于当前本地开发工具的环境约束，不影响项目业务代码通过标准 Maven / npm / DevEco 方式运行。
-
-### 10. HarmonyOS 首次运行
-
-HarmonyOS 端说明见：
-
-```text
-harmony/README.md
-```
-
-默认 Gateway 地址：
-
-```text
-http://10.0.2.2:8080
-```
-
-其中 `10.0.2.2` 是 Emulator 访问宿主机的地址。真机或不同模拟器网络环境需要按实际宿主机地址调整 `entry/src/main/ets/network/NetworkConfig.ets`。
-
-### 11. 首次运行最小验收
-
-组员环境搭建完成后至少确认：
-
-1. Gateway `8080` 可访问；
-2. Auth 能返回验证码；
-3. Bootstrap Admin 可以登录；
-4. `/api/auth/me` 能返回角色和 permissions；
-5. Web 可以正常进入对应角色首页；
-6. 创建巡检异常后 Maintenance 可以形成缺陷；
-7. 需要 AI 时，DeepSeek Key 有效并可以完成一次诊断；
-8. HarmonyOS 开发成员可以通过 Gateway 登录并打开本人任务或工单。
-
-如果只做某一个模块，可以只启动与该模块相关的依赖，但提交合并前应回到完整主链做回归。
+如果只开发某个模块，可以按需要启动相关服务；提交合并前应完成受影响业务链的回归。
 
 ## 文档入口
 
